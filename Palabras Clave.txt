@@ -1,0 +1,23 @@
+OFF-LINE PATH PLANNING ALGORITHMS
+
+Offline
+ 
+Global
+
+Evolutionary approaches
+
+Evolutionary Computation
+
+The term Heuristic has not only been used to refer to Evolutionary and Artificial Intelligence algorithms [8], but it has also been also used to refer to Graph Search-based planners [4]. With this in mind, we propose the use of a general classification using four classes (see Figure 1): Reactive Computing, Soft Computing, C-Space Search, and Optimal Control. Moreover,
+
+Evolutionary algorithms such as Ant Colony Optimizers (ACO) can also make use of a graph. 
+
+The objective of the path planner is to minimize this accumulation by producing the optimal path. The cost in question can be uniform, in the sense that the regions that can be accessed by the robot always have the same value. This approach can be used for collision-avoidance path planning, in which metrics such as the path length in a 2D plane are minimized. 
+
+Moreover, the cost can be also defined according to a direction vector. This means that the robot will experience different values of cost depending on its heading. In this case, the cost is categorized as anisotropic [31], whereas in the contrary case the cost is isotropic. 
+
+Differential drive
+
+Soft Computing algorithms
+
+In order to consider these constraints in the path planning phase, two main approaches are defined: direct and decoupled approaches. Decoupled approaches solve the problem by following a series of consecutive steps, such as computing a collision-free path neglecting the constraints and then smoothing it to satisfy the kinematic constraints and make the path feasible for the robot. These approaches have several drawbacks, such as the computation of inefficient paths or failure in finding a feasible trajectory. On the contrary, direct approaches solve the constrained path planning problem in one shot.
