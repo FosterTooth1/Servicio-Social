@@ -6,7 +6,7 @@ from svgpathtools import svg2paths
 ancho_extra = 10  # Ancho de la línea extra
 
 # Cargar el archivo SVG
-svg_file = "Pistas Limpias/Circuit_Nürburgring-1927 (Limpia).svg"
+svg_file = "Pistas Limpias/Autódromo_Oscar_y_Juan_Gálvez_Circuito_N°_15 (Limpia).svg"
 paths, attributes = svg2paths(svg_file)
 
 # Extraer coordenadas del path
