@@ -44,24 +44,21 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo)
 // Evalua la población
 // Recibe un puntero a la población y la longitud del genotipo
 // No devuelve nada (todo se hace por referencia)
-void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo)
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, float delta_t)
 {
     // Evalua cada individuo de la población
     for (int i = 0; i < poblacion->tamano; i++)
     {
-        poblacion->individuos[i].fitness = evaluar_individuo(poblacion->individuos[i].genotipo_izquierdo, poblacion->individuos[i].genotipo_derecho, longitud_genotipo);
+        poblacion->individuos[i].fitness = evaluar_individuo(poblacion->individuos[i].genotipo_izquierdo, poblacion->individuos[i].genotipo_derecho, longitud_genotipo, delta_t);
     }
 }
 
 // Función para calcular la distancia total recorrida por el individuo (fitness)
 // Recibe un genotipo y la longitud del genotipo
 // Devuelve el fitness del individuo
-float evaluar_individuo(float *u1, float *u2, int longitud_genotipo)
+float evaluar_individuo(float *u1, float *u2, int longitud_genotipo, float delta_t)
 {
     float total_cost = 0.0;
-    float delta_t = 0.001;
-    float valor_t = 0;
-    float limite_tiempo = 7.0;
     float condicion_inicial_x = 0;
     float condicion_inicial_y = 0;
     float condicion_inicial_phi = 0;
@@ -76,9 +73,7 @@ float evaluar_individuo(float *u1, float *u2, int longitud_genotipo)
         condicion_inicial_u1 = u1[i];
         condicion_inicial_u2 = u2[i];
         runge_kutta(delta_t, &condicion_inicial_x, &condicion_inicial_y, &condicion_inicial_phi, &condicion_inicial_vl, &condicion_inicial_vr, &condicion_inicial_u1, &condicion_inicial_u2, B);
-        valor_t = valor_t + delta_t;
     }
-
     // Calculamos la distancia actual al punto objetivo
     total_cost = sqrtf((condicion_inicial_x - 15) * (condicion_inicial_x - 15) + (condicion_inicial_y - 0) * (condicion_inicial_y - 0));
 
@@ -214,7 +209,7 @@ void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_
 }
 
 // Función de cruzamiento con SBX y selección de los mejores dos entre padres e hijos
-void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, float probabilidad_cruce) {
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, float probabilidad_cruce, float delta_t) {
     // Se asume que num_pob es par.
     for (int i = 0; i < num_pob; i += 2) {
         // Definimos una estructura temporal para almacenar u1, u2 y fitness
@@ -265,7 +260,7 @@ void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int lon
 
         // Evaluar a cada uno de los 4 individuos temporales
         for (int k = 0; k < 4; k++) {
-            temp[k].fitness = evaluar_individuo(temp[k].u1, temp[k].u2, longitud_genotipo);
+            temp[k].fitness = evaluar_individuo(temp[k].u1, temp[k].u2, longitud_genotipo, delta_t);
         }
 
         // Seleccionar los dos individuos con menor fitness (mejor aptitud)
@@ -678,41 +673,30 @@ void heapify(individuo *arr, int n, int i)
     }
 }
 
-// Funciones auxiliares de manipulación de arreglos (Usadas en la heurística de remoción de abruptos)
-
-// Función de comparación para qsort
-// Recibe dos punteros a distancia ordenada
-// Devuelve un entero que indica la relación entre las distancias
-int comparar_distancias(const void *a, const void *b)
+void imprimir_poblacion(poblacion *p, int longitud_genotipo)
 {
-    DistanciaOrdenada *da = (DistanciaOrdenada *)a;
-    DistanciaOrdenada *db = (DistanciaOrdenada *)b;
-    if (da->distancia < db->distancia)
-        return -1;
-    if (da->distancia > db->distancia)
-        return 1;
-    return 0;
-}
-
-// Función para insertar un elemento en una posición específica del array
-// Recibe un puntero al array, la longitud del array, el elemento a insertar y la posición
-// No devuelve nada (todo se hace por referencia)
-void insertar_en_posicion(int *array, int longitud, int elemento, int posicion)
-{
-    for (int i = longitud - 1; i > posicion; i--)
+    for (int i = 0; i < p->tamano; i++)
     {
-        array[i] = array[i - 1];
-    }
-    array[posicion] = elemento;
-}
-
-// Función para eliminar un elemento de una posición específica
-// Recibe un puntero al array, la longitud del array y la posición
-// No devuelve nada (todo se hace por referencia)
-void eliminar_de_posicion(int *array, int longitud, int posicion)
-{
-    for (int i = posicion; i < longitud - 1; i++)
-    {
-        array[i] = array[i + 1];
+        printf("Individuo %d:\n", i + 1);
+        
+        // Imprimir genotipo izquierdo
+        printf("Genotipo izquierdo: ");
+        for (int j = 0; j < longitud_genotipo; j++)
+        {
+            printf("%f ", p->individuos[i].genotipo_izquierdo[j]);
+        }
+        printf("\n");
+        
+        // Imprimir genotipo derecho
+        printf("Genotipo derecho: ");
+        for (int j = 0; j < longitud_genotipo; j++)
+        {
+            printf("%f ", p->individuos[i].genotipo_derecho[j]);
+        }
+        printf("\n");
+        
+        // Imprimir fitness
+        printf("Fitness: %f\n", p->individuos[i].fitness);
+        printf("-------------------------------\n");
     }
 }

@@ -6,8 +6,8 @@ int main(int argc, char** argv){
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 100;
-    float delta_t= 0.001;
+    int tamano_poblacion = 1000;
+    float delta_t= 0.01;
     float tiempo_test= 7.0;
     int longitud_genotipo = tiempo_test/delta_t;
     int num_generaciones  = 100;
@@ -25,8 +25,11 @@ int main(int argc, char** argv){
     // Creamos valores aleatorios de genotipo para cada individuo de la población
     crear_poblacion(Poblacion, longitud_genotipo);
 
+    //Imprimir poblacion
+    //imprimir_poblacion(Poblacion, longitud_genotipo);
+
     // Evaluamos la población
-    evaluar_poblacion(Poblacion, longitud_genotipo);
+    evaluar_poblacion(Poblacion, longitud_genotipo, delta_t);
 
     // Ordenamos la población
     ordenar_poblacion(Poblacion);
@@ -51,7 +54,7 @@ int main(int argc, char** argv){
         seleccionar_padres_torneo(Poblacion, padres, num_competidores, longitud_genotipo);
 
         // Cruzamos a los padres
-        cruzar_individuos(padres, hijos, tamano_poblacion, longitud_genotipo, probabilidad_cruce);
+        cruzar_individuos(padres, hijos, tamano_poblacion, longitud_genotipo, probabilidad_cruce, delta_t);
 
         // Mutamos a los hijos
         for (int i = 0; i < tamano_poblacion; i++) {
@@ -62,7 +65,7 @@ int main(int argc, char** argv){
         actualizar_poblacion(&Poblacion, hijos, longitud_genotipo);
 
         // Evaluamos a los hijos
-        evaluar_poblacion(Poblacion, longitud_genotipo);
+        evaluar_poblacion(Poblacion, longitud_genotipo, delta_t);
         ordenar_poblacion(Poblacion);
 
         // Actualizamos al mejor individuo si es necesario
@@ -76,7 +79,7 @@ int main(int argc, char** argv){
     }
 
     // Imprimimos al mejor individuo
-    printf(" Fitness del mejor individuo: %f\n", Mejor_Individuo->fitness);
+    printf("Fitness del mejor individuo: %f\n", Mejor_Individuo->fitness);
 
     // Liberamos la memoria de todos los elementos
     liberar_poblacion(Poblacion);
@@ -93,7 +96,7 @@ int main(int argc, char** argv){
 
     // Imprimimos el tiempo de ejecución
     double tiempo_ejecucion = difftime(fin, inicio);
-    printf("Tiempo de ejecución: %.2f segundos\n", tiempo_ejecucion);
+    printf("Tiempo de ejecucion: %.2f segundos\n", tiempo_ejecucion);
 
     return 0;
 }

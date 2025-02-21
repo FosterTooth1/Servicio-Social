@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<time.h>
+#include<math.h>
 
 // Estructuras
 // Estructura para un individuon (Almacena el genotipo izquierdo y dreceho del robot y el fitness)
@@ -17,27 +18,21 @@ typedef struct{
     int tamano;
 }poblacion;
 
-// Estructura para ordenar distancias (Almacena la distancia y el índice)(Usado en la heurística de remoción de abruptos)
-typedef struct {
-    float distancia;
-    int indice;
-} DistanciaOrdenada;
-
 //Funciones principales del algoritmo genético
 //Asigna memoria para una población
 poblacion *inicializar_poblacion(int tamano, int longitud_genotipo);
 //Crea valores aleatorios para los genotipos de los individuos de la poblacion
 void crear_poblacion(poblacion *poblacion, int longitud_genotipo);
 //Evalúa a la población
-void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo);
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, float delta_t);
 //Evalúa a un individuo
-float evaluar_individuo(float*u1, float *u2, int longitud_genotipo);
+float evaluar_individuo(float*u1, float *u2, int longitud_genotipo, float delta_t);
 //Ordena a la población de acuerdo a su fitness mediante el algoritmo de introsort
 void ordenar_poblacion(poblacion *poblacion);
 //Selecciona a los padres de la población mediante un torneo de fitness
 void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_competidores, int longitud_genotipo);
 //Cruza a los padres para generar a los hijos dependiendo de una probabilidad de cruce
-void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, float probabilidad_cruce);
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, float probabilidad_cruce, float delta_t);
 //Muta a un individuo dependiendo de una probabilidad de mutación
 void mutar_individuo(individuo *individuo, float probabilidad_mutacion, int longitud_genotipo);
 //Actualiza a la población con los nuevos individuos (hijos)
@@ -84,3 +79,5 @@ void runge_kutta(float delta_t, float* condicion_inicial_x, float* condicion_ini
 float x(float vl, float vr, float phi);
 float y(float vl, float vr, float phi);
 float phi(float vl, float vr, float B);
+
+void imprimir_poblacion(poblacion *p, int longitud_genotipo);
