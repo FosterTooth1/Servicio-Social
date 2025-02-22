@@ -17,8 +17,8 @@ poblacion *inicializar_poblacion(int tamano, int longitud_genotipo)
     // Asigna memoria para los genotipos de cada individuo
     for (int i = 0; i < tamano; i++)
     {
-        Poblacion->individuos[i].genotipo_izquierdo = malloc(longitud_genotipo * sizeof(float));
-        Poblacion->individuos[i].genotipo_derecho = malloc(longitud_genotipo * sizeof(float));
+        Poblacion->individuos[i].genotipo_izquierdo = malloc(longitud_genotipo * sizeof(double));
+        Poblacion->individuos[i].genotipo_derecho = malloc(longitud_genotipo * sizeof(double));
 
         // Inicializa el fitness en 0
         Poblacion->individuos[i].fitness = 0;
@@ -26,47 +26,110 @@ poblacion *inicializar_poblacion(int tamano, int longitud_genotipo)
     return Poblacion;
 }
 
-// Crea valores aleatorios para los genotipos de los individuos de la poblacion
-// Recibe un puntero a la población y la longitud del genotipo
-// No devuelve nada (todo se hace por referencia)
-void crear_poblacion(poblacion *poblacion, int longitud_genotipo)
+
+void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B)
 {
+    // Parámetros de la simulación y del controlador
+    double k = 0.1;          // ganancia del controlador proporcional
+
+    // Condiciones iniciales para cada simulación individual
+    double init_x = 0.0, init_y = 0.0, init_phi = 0.0;
+    double init_vl = 0.0, init_vr = 0.0;
+    // Definimos el objetivo (target) al que se desea llegar
+    double target_x = 15.0, target_y = 0.0;
+
+    // Para cada individuo de la población
     for (int i = 0; i < poblacion->tamano; i++)
     {
-        for (int j = 0; j < longitud_genotipo; j++)
+        // Se inicializan las variables de estado para cada individuo
+        double x = init_x, y = init_y, phi_val = init_phi;
+        double vl = init_vl, vr = init_vr;
+        // Se generan aceleraciones iniciales aleatorias para cada llanta en el rango [-0.5, 0.5]
+        double u1 = -0.5 + ((double)rand() / (double)RAND_MAX) * 1.0;
+        double u2 = -0.5 + ((double)rand() / (double)RAND_MAX) * 1.0;
+
+
+        // Guardamos las condiciones iniciales del genotipo
+        poblacion->individuos[i].genotipo_izquierdo[0] = u1;
+        poblacion->individuos[i].genotipo_derecho[0]   = u2;
+
+        // Calculamos la distancia inicial al objetivo
+        double prev_distance = sqrt((x - target_x) * (x - target_x) +
+                                          (y - target_y) * (y - target_y));
+
+        // Para cada instante de tiempo (a partir del segundo) se simula la acción del controlador
+        for (int j = 1; j < longitud_genotipo; j++)
         {
-            poblacion->individuos[i].genotipo_izquierdo[j] = ((float)rand() / RAND_MAX) - 0.5;
-            poblacion->individuos[i].genotipo_derecho[j] = ((float)rand() / RAND_MAX) - 0.5;
+            // Se actualiza el estado del robot (posición, orientación, velocidades y aceleraciones)
+            runge_kutta(delta_t, &x, &y, &phi_val, &vl, &vr, &u1, &u2, B);
+
+            // Se calcula la distancia actual al objetivo
+            double current_distance = sqrt((x - target_x) * (x - target_x) +
+                                                 (y - target_y) * (y - target_y));
+
+            // Si la distancia aumenta, se aplica la heurística kp para corregir la trayectoria
+            if (current_distance > prev_distance)
+            {
+                // Se calcula el ángulo deseado hacia el objetivo
+                double desired_angle = atan2l(target_y - y, target_x - x);
+                // Se determina el error entre el ángulo deseado y la orientación actual
+                double error_angle = desired_angle - phi_val;
+                // Normalizamos error_angle al rango [-pi, pi]
+                while (error_angle > M_PI)
+                    error_angle -= 2.0 * M_PI;
+                while (error_angle < -M_PI)
+                    error_angle += 2.0 * M_PI;
+
+                // Calculamos el ajuste basado en el controlador proporcional
+                double adjustment = k * error_angle;
+
+                // Ajustamos las aceleraciones: se disminuye u1 e incrementa u2 (o viceversa)
+                u1 -= adjustment;
+                u2 += adjustment;
+
+                // Se limitan las aceleraciones al rango permitido [-0.5, 0.5]
+                if (u1 > 0.5) u1 = 0.5;
+                if (u1 < -0.5) u1 = -0.5;
+                if (u2 > 0.5) u2 = 0.5;
+                if (u2 < -0.5) u2 = -0.5;
+            }
+
+            // Se guarda el par de aceleraciones calculado en el genotipo del individuo
+            poblacion->individuos[i].genotipo_izquierdo[j] = u1;
+            poblacion->individuos[i].genotipo_derecho[j]   = u2;
+
+            // Se actualiza la distancia previa para la siguiente iteración
+            prev_distance = current_distance;
         }
     }
 }
 
+
 // Evalua la población
 // Recibe un puntero a la población y la longitud del genotipo
 // No devuelve nada (todo se hace por referencia)
-void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, float delta_t)
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B)
 {
     // Evalua cada individuo de la población
     for (int i = 0; i < poblacion->tamano; i++)
     {
-        poblacion->individuos[i].fitness = evaluar_individuo(poblacion->individuos[i].genotipo_izquierdo, poblacion->individuos[i].genotipo_derecho, longitud_genotipo, delta_t);
+        poblacion->individuos[i].fitness = evaluar_individuo(poblacion->individuos[i].genotipo_izquierdo, poblacion->individuos[i].genotipo_derecho, longitud_genotipo, delta_t, B);
     }
 }
 
 // Función para calcular la distancia total recorrida por el individuo (fitness)
 // Recibe un genotipo y la longitud del genotipo
 // Devuelve el fitness del individuo
-float evaluar_individuo(float *u1, float *u2, int longitud_genotipo, float delta_t)
+double evaluar_individuo(double *u1, double *u2, int longitud_genotipo, double delta_t, double B)
 {
-    float total_cost = 0.0;
-    float condicion_inicial_x = 0;
-    float condicion_inicial_y = 0;
-    float condicion_inicial_phi = 0;
-    float condicion_inicial_vl = 0;
-    float condicion_inicial_vr = 0;
-    float B = 0.20;
-    float condicion_inicial_u1;
-    float condicion_inicial_u2;
+    double total_cost = 0.0;
+    double condicion_inicial_x = 0.0;
+    double condicion_inicial_y = 0.0;
+    double condicion_inicial_phi = 0.0;
+    double condicion_inicial_vl = 0.0;
+    double condicion_inicial_vr = 0.0;
+    double condicion_inicial_u1;
+    double condicion_inicial_u2;
 
     for (int i = 0; i < longitud_genotipo; i++)
     {
@@ -75,48 +138,48 @@ float evaluar_individuo(float *u1, float *u2, int longitud_genotipo, float delta
         runge_kutta(delta_t, &condicion_inicial_x, &condicion_inicial_y, &condicion_inicial_phi, &condicion_inicial_vl, &condicion_inicial_vr, &condicion_inicial_u1, &condicion_inicial_u2, B);
     }
     // Calculamos la distancia actual al punto objetivo
-    total_cost = sqrtf((condicion_inicial_x - 15) * (condicion_inicial_x - 15) + (condicion_inicial_y - 0) * (condicion_inicial_y - 0));
+    total_cost = sqrt((condicion_inicial_x - 15) * (condicion_inicial_x - 15) + (condicion_inicial_y - 0) * (condicion_inicial_y - 0));
 
     return total_cost;
 }
 
 // Runge Kutta
-void runge_kutta(float delta_t, float *condicion_inicial_x, float *condicion_inicial_y, float *condicion_inicial_phi, float *condicion_inicial_vl, float *condicion_inicial_vr, float *condicion_inicial_u1, float *condicion_inicial_u2, float B)
+void runge_kutta(double delta_t, double *condicion_inicial_x, double *condicion_inicial_y, double *condicion_inicial_phi, double *condicion_inicial_vl, double *condicion_inicial_vr, double *condicion_inicial_u1, double *condicion_inicial_u2, double B)
 {
 
     // Calculo K1
-    float k1_x = x(*condicion_inicial_vl, *condicion_inicial_vr, *condicion_inicial_phi);
-    float k1_y = y(*condicion_inicial_vl, *condicion_inicial_vr, *condicion_inicial_phi);
-    float k1_phi = phi(*condicion_inicial_vl, *condicion_inicial_vr, B);
-    float k1_vl = *condicion_inicial_u1;
-    float k1_vr = *condicion_inicial_u2;
+    double k1_x = x(*condicion_inicial_vl, *condicion_inicial_vr, *condicion_inicial_phi);
+    double k1_y = y(*condicion_inicial_vl, *condicion_inicial_vr, *condicion_inicial_phi);
+    double k1_phi = phi(*condicion_inicial_vl, *condicion_inicial_vr, B);
+    double k1_vl = *condicion_inicial_u1;
+    double k1_vr = *condicion_inicial_u2;
 
     // Calculo K2
-    float k2_x = x(*condicion_inicial_vl + (k1_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k1_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k1_phi) * ((0.5) * (delta_t)));
-    float k2_y = y(*condicion_inicial_vl + (k1_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k1_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k1_phi) * ((0.5) * (delta_t)));
-    float k2_phi = phi(*condicion_inicial_vl + (k1_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k1_vr) * ((0.5) * (delta_t)), B);
-    float k2_vl = k1_vl;
-    float k2_vr = k1_vr;
+    double k2_x = x(*condicion_inicial_vl + (k1_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k1_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k1_phi) * ((0.5) * (delta_t)));
+    double k2_y = y(*condicion_inicial_vl + (k1_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k1_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k1_phi) * ((0.5) * (delta_t)));
+    double k2_phi = phi(*condicion_inicial_vl + (k1_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k1_vr) * ((0.5) * (delta_t)), B);
+    double k2_vl = k1_vl;
+    double k2_vr = k1_vr;
 
     // Calculo k3
-    float k3_x = x(*condicion_inicial_vl + (k2_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k2_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k2_phi) * ((0.5) * (delta_t)));
-    float k3_y = y(*condicion_inicial_vl + (k2_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k2_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k2_phi) * ((0.5) * (delta_t)));
-    float k3_phi = phi(*condicion_inicial_vl + (k2_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k2_vr) * ((0.5) * (delta_t)), B);
-    float k3_vl = k1_vl;
-    float k3_vr = k1_vr;
+    double k3_x = x(*condicion_inicial_vl + (k2_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k2_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k2_phi) * ((0.5) * (delta_t)));
+    double k3_y = y(*condicion_inicial_vl + (k2_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k2_vr) * ((0.5) * (delta_t)), *condicion_inicial_phi + (k2_phi) * ((0.5) * (delta_t)));
+    double k3_phi = phi(*condicion_inicial_vl + (k2_vl) * ((0.5) * (delta_t)), *condicion_inicial_vr + (k2_vr) * ((0.5) * (delta_t)), B);
+    double k3_vl = k1_vl;
+    double k3_vr = k1_vr;
 
     // Calculo k4
-    float k4_x = x(*condicion_inicial_vl + (k3_vl) * (delta_t), *condicion_inicial_vr + (k3_vr) * (delta_t), *condicion_inicial_phi + (k3_phi) * (delta_t));
-    float k4_y = y(*condicion_inicial_vl + (k3_vl) * (delta_t), *condicion_inicial_vr + (k3_vr) * (delta_t), *condicion_inicial_phi + (k3_phi) * (delta_t));
-    float k4_phi = phi(*condicion_inicial_vl + (k3_vl) * (delta_t), *condicion_inicial_vr + (k3_vr) * (delta_t), B);
-    float k4_vl = k1_vl;
-    float k4_vr = k1_vr;
+    double k4_x = x(*condicion_inicial_vl + (k3_vl) * (delta_t), *condicion_inicial_vr + (k3_vr) * (delta_t), *condicion_inicial_phi + (k3_phi) * (delta_t));
+    double k4_y = y(*condicion_inicial_vl + (k3_vl) * (delta_t), *condicion_inicial_vr + (k3_vr) * (delta_t), *condicion_inicial_phi + (k3_phi) * (delta_t));
+    double k4_phi = phi(*condicion_inicial_vl + (k3_vl) * (delta_t), *condicion_inicial_vr + (k3_vr) * (delta_t), B);
+    double k4_vl = k1_vl;
+    double k4_vr = k1_vr;
 
-    float new_condicion_inicial_x = (*condicion_inicial_x) + (((delta_t) / (6)) * (k1_x + ((2) * (k2_x)) + ((2) * (k3_x)) + k4_x));
-    float new_condicion_inicial_y = (*condicion_inicial_y) + (((delta_t) / (6)) * (k1_y + ((2) * (k2_y)) + ((2) * (k3_y)) + k4_y));
-    float new_condicion_inicial_phi = (*condicion_inicial_phi) + (((delta_t) / (6)) * (k1_phi + ((2) * (k2_phi)) + ((2) * (k3_phi)) + k4_phi));
-    float new_condicion_inicial_vl = (*condicion_inicial_vl) + (((delta_t) / (6)) * (k1_vl + ((2) * (k2_vl)) + ((2) * (k3_vl)) + k4_vl));
-    float new_condicion_inicial_vr = (*condicion_inicial_vr) + (((delta_t) / (6)) * (k1_vr + ((2) * (k2_vr)) + ((2) * (k3_vr)) + k4_vr));
+    double new_condicion_inicial_x = (*condicion_inicial_x) + (((delta_t) / (6)) * (k1_x + ((2) * (k2_x)) + ((2) * (k3_x)) + k4_x));
+    double new_condicion_inicial_y = (*condicion_inicial_y) + (((delta_t) / (6)) * (k1_y + ((2) * (k2_y)) + ((2) * (k3_y)) + k4_y));
+    double new_condicion_inicial_phi = (*condicion_inicial_phi) + (((delta_t) / (6)) * (k1_phi + ((2) * (k2_phi)) + ((2) * (k3_phi)) + k4_phi));
+    double new_condicion_inicial_vl = (*condicion_inicial_vl) + (((delta_t) / (6)) * (k1_vl + ((2) * (k2_vl)) + ((2) * (k3_vl)) + k4_vl));
+    double new_condicion_inicial_vr = (*condicion_inicial_vr) + (((delta_t) / (6)) * (k1_vr + ((2) * (k2_vr)) + ((2) * (k3_vr)) + k4_vr));
 
     *condicion_inicial_x = new_condicion_inicial_x;
     *condicion_inicial_y = new_condicion_inicial_y;
@@ -125,17 +188,17 @@ void runge_kutta(float delta_t, float *condicion_inicial_x, float *condicion_ini
     *condicion_inicial_vr = new_condicion_inicial_vr;
 }
 
-float x(float vl, float vr, float phi)
+double x(double vl, double vr, double phi)
 {
     return (((vl + vr) / 2) * (cos(phi)));
 }
 
-float y(float vl, float vr, float phi)
+double y(double vl, double vr, double phi)
 {
     return (((vl + vr) / 2) * (sin(phi)));
 }
 
-float phi(float vl, float vr, float B)
+double phi(double vl, double vr, double B)
 {
     return (vr - vl) / B;
 }
@@ -180,11 +243,11 @@ void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_
 
         // Encontramos el ganador del torneo evaluando su fitness
         int indice_ganador = indices_torneo[0];
-        float mejor_fitness = Poblacion->individuos[indices_torneo[0]].fitness;
+        double mejor_fitness = Poblacion->individuos[indices_torneo[0]].fitness;
         for (int j = 1; j < num_competidores; j++)
         {
             int indice_actual = indices_torneo[j];
-            float fitness_actual = Poblacion->individuos[indice_actual].fitness;
+            double fitness_actual = Poblacion->individuos[indice_actual].fitness;
 
             if (fitness_actual < mejor_fitness)
             {
@@ -209,21 +272,21 @@ void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_
 }
 
 // Función de cruzamiento con SBX y selección de los mejores dos entre padres e hijos
-void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, float probabilidad_cruce, float delta_t) {
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B) {
     // Se asume que num_pob es par.
     for (int i = 0; i < num_pob; i += 2) {
         // Definimos una estructura temporal para almacenar u1, u2 y fitness
         typedef struct {
-            float *u1;
-            float *u2;
-            float fitness;
+            double *u1;
+            double *u2;
+            double fitness;
         } individuo_temp;
 
         individuo_temp temp[4];
         // Asignar memoria para los arreglos de cada individuo temporal
         for (int k = 0; k < 4; k++) {
-            temp[k].u1 = malloc(longitud_genotipo * sizeof(float));
-            temp[k].u2 = malloc(longitud_genotipo * sizeof(float));
+            temp[k].u1 = malloc(longitud_genotipo * sizeof(double));
+            temp[k].u2 = malloc(longitud_genotipo * sizeof(double));
         }
 
         // Copiar los padres en temp[0] y temp[1]
@@ -236,7 +299,7 @@ void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int lon
 
         // Si se cumple la probabilidad de cruzamiento, generar hijos con SBX;
         // de lo contrario, copiar directamente los padres a los hijos temporales.
-        if (((float)rand() / RAND_MAX) < probabilidad_cruce) {
+        if (((double)rand() / RAND_MAX) < probabilidad_cruce) {
             for (int j = 0; j < longitud_genotipo; j++) {
                 sbx_crossover(padres->individuos[i].genotipo_izquierdo[j],
                               padres->individuos[i+1].genotipo_izquierdo[j],
@@ -260,7 +323,7 @@ void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int lon
 
         // Evaluar a cada uno de los 4 individuos temporales
         for (int k = 0; k < 4; k++) {
-            temp[k].fitness = evaluar_individuo(temp[k].u1, temp[k].u2, longitud_genotipo, delta_t);
+            temp[k].fitness = evaluar_individuo(temp[k].u1, temp[k].u2, longitud_genotipo, delta_t, B);
         }
 
         // Seleccionar los dos individuos con menor fitness (mejor aptitud)
@@ -298,32 +361,32 @@ void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int lon
 }
 
 // Función de mutación polinomial para un individuo
-void mutar_individuo(individuo *ind, float probabilidad_mutacion, int longitud_genotipo)
+void mutar_individuo(individuo *ind, double probabilidad_mutacion, int longitud_genotipo)
 {
     for (int j = 0; j < longitud_genotipo; j++)
     {
         // Mutación para el gen en genotipo_izquierdo (u1)
-        if (((float)rand() / RAND_MAX) < probabilidad_mutacion)
+        if (((double)rand() / RAND_MAX) < probabilidad_mutacion)
         {
-            float x = ind->genotipo_izquierdo[j];
-            float xl = -0.5;
-            float xu = 0.5;
+            double x = ind->genotipo_izquierdo[j];
+            double xl = -0.5;
+            double xu = 0.5;
             // Calcular los parámetros delta1 y delta2
-            float delta1 = (x - xl) / (xu - xl);
-            float delta2 = (xu - x) / (xu - xl);
-            float r = ((float)rand() / RAND_MAX);
-            float mut_pow = 1.0 / (20 + 1.0);
-            float delta_q;
+            double delta1 = (x - xl) / (xu - xl);
+            double delta2 = (xu - x) / (xu - xl);
+            double r = ((double)rand() / RAND_MAX);
+            double mut_pow = 1.0 / (20 + 1.0);
+            double delta_q;
             if (r <= 0.5)
             {
-                float xy = 1.0 - delta1;
-                float val = 2.0 * r + (1.0 - 2.0 * r) * pow(xy, 20 + 1);
+                double xy = 1.0 - delta1;
+                double val = 2.0 * r + (1.0 - 2.0 * r) * pow(xy, 20 + 1);
                 delta_q = pow(val, mut_pow) - 1.0;
             }
             else
             {
-                float xy = 1.0 - delta2;
-                float val = 2.0 * (1.0 - r) + 2.0 * (r - 0.5) * pow(xy, 20 + 1);
+                double xy = 1.0 - delta2;
+                double val = 2.0 * (1.0 - r) + 2.0 * (r - 0.5) * pow(xy, 20 + 1);
                 delta_q = 1.0 - pow(val, mut_pow);
             }
             // Actualizar el gen y asegurarse de que se encuentre dentro de los límites
@@ -334,26 +397,26 @@ void mutar_individuo(individuo *ind, float probabilidad_mutacion, int longitud_g
         }
 
         // Mutación para el gen en genotipo_derecho (u2)
-        if (((float)rand() / RAND_MAX) < probabilidad_mutacion)
+        if (((double)rand() / RAND_MAX) < probabilidad_mutacion)
         {
-            float x = ind->genotipo_derecho[j];
-            float xl = -0.5;
-            float xu = 0.5;
-            float delta1 = (x - xl) / (xu - xl);
-            float delta2 = (xu - x) / (xu - xl);
-            float r = ((float)rand() / RAND_MAX);
-            float mut_pow = 1.0 / (20 + 1.0);
-            float delta_q;
+            double x = ind->genotipo_derecho[j];
+            double xl = -0.5;
+            double xu = 0.5;
+            double delta1 = (x - xl) / (xu - xl);
+            double delta2 = (xu - x) / (xu - xl);
+            double r = ((double)rand() / RAND_MAX);
+            double mut_pow = 1.0 / (20 + 1.0);
+            double delta_q;
             if (r <= 0.5)
             {
-                float xy = 1.0 - delta1;
-                float val = 2.0 * r + (1.0 - 2.0 * r) * pow(xy, 20 + 1);
+                double xy = 1.0 - delta1;
+                double val = 2.0 * r + (1.0 - 2.0 * r) * pow(xy, 20 + 1);
                 delta_q = pow(val, mut_pow) - 1.0;
             }
             else
             {
-                float xy = 1.0 - delta2;
-                float val = 2.0 * (1.0 - r) + 2.0 * (r - 0.5) * pow(xy, 20 + 1);
+                double xy = 1.0 - delta2;
+                double val = 2.0 * (1.0 - r) + 2.0 * (r - 0.5) * pow(xy, 20 + 1);
                 delta_q = 1.0 - pow(val, mut_pow);
             }
             x = x + delta_q * (xu - xl);
@@ -448,8 +511,8 @@ void liberar_poblacion(poblacion *pob)
 
 // Función SBX para un solo gen (una variable)
 // Recibe el valor del gen de cada padre, y genera dos hijos
-void sbx_crossover(float parent1, float parent2, float *child1, float *child2,
-                   float eta, float lower_bound, float upper_bound)
+void sbx_crossover(double parent1, double parent2, double *child1, double *child2,
+                   double eta, double lower_bound, double upper_bound)
 {
     // Si los padres son casi iguales, se copia el valor sin cambio.
     if (fabs(parent1 - parent2) < 1e-14)
@@ -460,17 +523,17 @@ void sbx_crossover(float parent1, float parent2, float *child1, float *child2,
     }
 
     // Se genera un número aleatorio en [0,1]
-    float u = ((float)rand() / RAND_MAX);
-    float beta;
+    double u = ((double)rand() / RAND_MAX);
+    double beta;
 
     if (u <= 0.5)
-        beta = pow(2 * u, 1.0f / (eta + 1));
+        beta = pow(2 * u, 1.0 / (eta + 1));
     else
-        beta = pow(1.0f / (2 * (1 - u)), 1.0f / (eta + 1));
+        beta = pow(1.0 / (2 * (1 - u)), 1.0 / (eta + 1));
 
     // Cálculo de los hijos
-    *child1 = 0.5f * ((parent1 + parent2) - beta * (parent2 - parent1));
-    *child2 = 0.5f * ((parent1 + parent2) + beta * (parent2 - parent1));
+    *child1 = 0.5 * ((parent1 + parent2) - beta * (parent2 - parent1));
+    *child2 = 0.5 * ((parent1 + parent2) + beta * (parent2 - parent1));
 
     // Se asegura que los hijos estén dentro de los límites
     if (*child1 < lower_bound)

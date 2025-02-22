@@ -4,12 +4,16 @@
 #include<time.h>
 #include<math.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // Estructuras
 // Estructura para un individuon (Almacena el genotipo izquierdo y dreceho del robot y el fitness)
 typedef struct{
-    float *genotipo_izquierdo;
-    float *genotipo_derecho;
-    float fitness;
+    double *genotipo_izquierdo;
+    double *genotipo_derecho;
+    double fitness;
 }individuo;
 
 // Estructura para una población (Almacena un arreglo de individuos y su tamaño)
@@ -22,19 +26,19 @@ typedef struct{
 //Asigna memoria para una población
 poblacion *inicializar_poblacion(int tamano, int longitud_genotipo);
 //Crea valores aleatorios para los genotipos de los individuos de la poblacion
-void crear_poblacion(poblacion *poblacion, int longitud_genotipo);
+void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B);
 //Evalúa a la población
-void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, float delta_t);
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B);
 //Evalúa a un individuo
-float evaluar_individuo(float*u1, float *u2, int longitud_genotipo, float delta_t);
+double evaluar_individuo(double*u1, double *u2, int longitud_genotipo, double delta_t, double B);
 //Ordena a la población de acuerdo a su fitness mediante el algoritmo de introsort
 void ordenar_poblacion(poblacion *poblacion);
 //Selecciona a los padres de la población mediante un torneo de fitness
 void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_competidores, int longitud_genotipo);
 //Cruza a los padres para generar a los hijos dependiendo de una probabilidad de cruce
-void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, float probabilidad_cruce, float delta_t);
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B);
 //Muta a un individuo dependiendo de una probabilidad de mutación
-void mutar_individuo(individuo *individuo, float probabilidad_mutacion, int longitud_genotipo);
+void mutar_individuo(individuo *individuo, double probabilidad_mutacion, int longitud_genotipo);
 //Actualiza a la población con los nuevos individuos (hijos)
 void actualizar_poblacion(poblacion **destino, poblacion *origen, int longitud_genotipo);
 //Libera la memoria usada para la población
@@ -44,8 +48,8 @@ void liberar_poblacion(poblacion *poblacion);
 //Funciones auxiliares del cruzamiento
 // Función SBX para un solo gen (una variable)
 // Recibe el valor del gen de cada padre, y genera dos hijos
-void sbx_crossover(float parent1, float parent2, float *child1, float *child2,
-    float eta, float lower_bound, float upper_bound);
+void sbx_crossover(double parent1, double parent2, double *child1, double *child2,
+    double eta, double lower_bound, double upper_bound);
 
 //Funciones auxiliares de ordenamiento
 // Introsort es un algoritmo de ordenamiento híbrido que combina QuickSort, HeapSort e InsertionSort
@@ -75,9 +79,9 @@ void eliminar_de_posicion(int* array, int longitud, int posicion);
 
 ////////////Runge Kutta
 
-void runge_kutta(float delta_t, float* condicion_inicial_x, float* condicion_inicial_y, float* condicion_inicial_phi, float* condicion_inicial_vl, float* condicion_inicial_vr, float* condicion_inicial_u1, float* condicion_inicial_u2, float B);
-float x(float vl, float vr, float phi);
-float y(float vl, float vr, float phi);
-float phi(float vl, float vr, float B);
+void runge_kutta(double delta_t, double* condicion_inicial_x, double* condicion_inicial_y, double* condicion_inicial_phi, double* condicion_inicial_vl, double* condicion_inicial_vr, double* condicion_inicial_u1, double* condicion_inicial_u2, double B);
+double x(double vl, double vr, double phi);
+double y(double vl, double vr, double phi);
+double phi(double vl, double vr, double B);
 
 void imprimir_poblacion(poblacion *p, int longitud_genotipo);

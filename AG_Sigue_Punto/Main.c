@@ -6,16 +6,17 @@ int main(int argc, char** argv){
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 1000;
-    float delta_t= 0.01;
-    float tiempo_test= 7.0;
+    int tamano_poblacion = 100;
+    double delta_t= 0.01;
+    double tiempo_test= 7.0;
     int longitud_genotipo = tiempo_test/delta_t;
     int num_generaciones  = 100;
     int num_competidores  = 2;
-    float limite_inferior = -0.5;
-    float limite_superior = 0.5;
-    float probabilidad_mutacion = 0.15;
-    float probabilidad_cruce = 0.90;
+    double limite_inferior = -0.5;
+    double limite_superior = 0.5;
+    double probabilidad_mutacion = 0.15;
+    double probabilidad_cruce = 0.9;
+    double B = 0.2;
 
     // Inicializamos la población
     poblacion *Poblacion = inicializar_poblacion(tamano_poblacion, longitud_genotipo);
@@ -23,21 +24,21 @@ int main(int argc, char** argv){
     poblacion *hijos = inicializar_poblacion(tamano_poblacion, longitud_genotipo);
 
     // Creamos valores aleatorios de genotipo para cada individuo de la población
-    crear_poblacion(Poblacion, longitud_genotipo);
+    crear_poblacion(Poblacion, longitud_genotipo, delta_t, B);
 
     //Imprimir poblacion
     //imprimir_poblacion(Poblacion, longitud_genotipo);
 
     // Evaluamos la población
-    evaluar_poblacion(Poblacion, longitud_genotipo, delta_t);
+    evaluar_poblacion(Poblacion, longitud_genotipo, delta_t, B);
 
     // Ordenamos la población
     ordenar_poblacion(Poblacion);
 
     // Inicializamos el mejor individuo
     individuo *Mejor_Individuo = (individuo *)malloc(sizeof(individuo));
-    Mejor_Individuo->genotipo_izquierdo = (float *)malloc(longitud_genotipo * sizeof(float));
-    Mejor_Individuo->genotipo_derecho = (float *)malloc(longitud_genotipo * sizeof(float));
+    Mejor_Individuo->genotipo_izquierdo = (double *)malloc(longitud_genotipo * sizeof(double));
+    Mejor_Individuo->genotipo_derecho = (double *)malloc(longitud_genotipo * sizeof(double));
 
     // Copiamos el mejor individuo de la población a Mejor_Individuo
     for (int i = 0; i < longitud_genotipo; i++) {
@@ -54,7 +55,7 @@ int main(int argc, char** argv){
         seleccionar_padres_torneo(Poblacion, padres, num_competidores, longitud_genotipo);
 
         // Cruzamos a los padres
-        cruzar_individuos(padres, hijos, tamano_poblacion, longitud_genotipo, probabilidad_cruce, delta_t);
+        cruzar_individuos(padres, hijos, tamano_poblacion, longitud_genotipo, probabilidad_cruce, delta_t, B);
 
         // Mutamos a los hijos
         for (int i = 0; i < tamano_poblacion; i++) {
@@ -65,7 +66,7 @@ int main(int argc, char** argv){
         actualizar_poblacion(&Poblacion, hijos, longitud_genotipo);
 
         // Evaluamos a los hijos
-        evaluar_poblacion(Poblacion, longitud_genotipo, delta_t);
+        evaluar_poblacion(Poblacion, longitud_genotipo, delta_t, B);
         ordenar_poblacion(Poblacion);
 
         // Actualizamos al mejor individuo si es necesario
@@ -79,7 +80,7 @@ int main(int argc, char** argv){
     }
 
     // Imprimimos al mejor individuo
-    printf("Fitness del mejor individuo: %f\n", Mejor_Individuo->fitness);
+    printf("Fitness del mejor individuo: %Lf\n", Mejor_Individuo->fitness);
 
     // Liberamos la memoria de todos los elementos
     liberar_poblacion(Poblacion);
