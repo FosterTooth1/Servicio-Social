@@ -6,7 +6,7 @@ int main(int argc, char** argv){
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 100;
+    int tamano_poblacion = 1000;
     double delta_t= 0.01;
     double tiempo_test= 7.0;
     int longitud_genotipo = tiempo_test/delta_t;

@@ -2,7 +2,6 @@ import ctypes
 from ctypes import c_int, c_float, POINTER
 import os
 import matplotlib.pyplot as plt
-from matplotlib.backend_bases import MouseButton
 import math
 
 # Mapeamos la estructura SimulationResult de C
@@ -17,7 +16,6 @@ class Simulator:
         # Cargamos la biblioteca
         self.lib = ctypes.CDLL(lib_path)
         # Configuramos el tipo de retorno y los argumentos de la función simular.
-        # Se reciben 10 parámetros: delta_t, limite_tiempo, cond_x, cond_y, cond_phi, cond_vl, cond_vr, B, target_x, target_y
         self.lib.simular.restype = POINTER(SimulationResult)
         self.lib.simular.argtypes = [c_float, c_float, c_float, c_float, c_float,
                                      c_float, c_float, c_float, c_float, c_float]
@@ -44,7 +42,6 @@ class PointPlotter:
     def __init__(self, points, target):
         self.points = points  # Lista de tuplas (x, y) del robot
         self.target = target  # Tupla (target_x, target_y)
-        self.index = 0
         self.fig, self.ax = plt.subplots()
         self.ax.set_title("Trayectoria del Robot y Punto Objetivo")
         self.ax.set_xlabel("X")
@@ -60,32 +57,19 @@ class PointPlotter:
         margin = 1.0
         self.ax.set_xlim(min(xs) - margin, max(xs) + margin)
         self.ax.set_ylim(min(ys) - margin, max(ys) + margin)
-        
         self.ax.legend()
-        # Conectamos el evento de clic con la función on_click
-        self.cid = self.fig.canvas.mpl_connect('button_press_event', self.on_click)
     
-    def on_click(self, event):
-        # Procesamos solo clic izquierdo
-        if event.button != MouseButton.LEFT:
-            return
-        if self.index < len(self.points):
-            p = self.points[self.index]
-            # Dibuja el punto actual del robot y su etiqueta
+    def show(self):
+        # Dibuja todos los puntos sin ningún retardo
+        for index, p in enumerate(self.points):
+            # Dibuja el punto actual y su etiqueta
             self.ax.plot(p[0], p[1], 'ro')
             self.ax.annotate(f"({p[0]:.2f}, {p[1]:.2f})", (p[0], p[1]),
                              textcoords="offset points", xytext=(5, 5))
             # Si no es el primer punto, dibuja la línea entre el anterior y el actual
-            if self.index > 0:
-                prev = self.points[self.index - 1]
+            if index > 0:
+                prev = self.points[index - 1]
                 self.ax.plot([prev[0], p[0]], [prev[1], p[1]], 'b-')
-            self.fig.canvas.draw()
-            self.index += 1
-        else:
-            # Cuando se hayan mostrado todos los puntos, se cierra la figura
-            plt.close(self.fig)
-    
-    def show(self):
         plt.show()
 
 def main():
@@ -99,35 +83,32 @@ def main():
     sim = Simulator(lib_path)
     
     # Definimos el punto objetivo
-    target = (75.0, 150.0)
+    target = (15.0, 0.0)
     
     # Ejecutamos la simulación
     resultados = sim.simular(
-        delta_t=0.0001,
-        limite_tiempo=600,  # tiempo total de simulación
+        delta_t=0.01,
+        limite_tiempo=7,  # tiempo total de simulación
         cond_x=0.0,
         cond_y=0.0,
         cond_phi=0.0,
-        cond_vl=10.0,
-        cond_vr=10.0,
+        cond_vl=0.0,
+        cond_vr=0.0,
         B=0.20,
         target_x=target[0],
         target_y=target[1]
     )
     
-    # Extraemos de los resultados únicamente los puntos (x, y) cada 60 segundos.
+    # Extraemos de los resultados únicamente los puntos (x, y)
     points = []
-    next_threshold = 60.0
     for row in resultados:
-        if row[0] >= next_threshold:
-            points.append((row[1], row[2]))  # (x, y)
-            next_threshold += 60.0
+        points.append((row[1], row[2]))  # (x, y)
 
     if not points:
-        print("No hay puntos cada 60 segundos en la simulación.")
+        print("No hay puntos en la simulación.")
         return
 
-    # Iniciamos la representación interactiva con matplotlib
+    # Iniciamos la representación con matplotlib sin retardo
     plotter = PointPlotter(points, target)
     plotter.show()
 

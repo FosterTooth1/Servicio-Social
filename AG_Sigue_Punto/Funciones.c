@@ -29,8 +29,10 @@ poblacion *inicializar_poblacion(int tamano, int longitud_genotipo)
 
 void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B)
 {
-    // Parámetros de la simulación y del controlador
-    double k = 0.1;          // ganancia del controlador proporcional
+    // Parámetros de la simulación y del controlador PID
+    double kP = 0.2;       // ganancia proporcional
+    double kI = 0.1;      // ganancia integral
+    double kD = 0.1;      // ganancia derivativa
 
     // Condiciones iniciales para cada simulación individual
     double init_x = 0.0, init_y = 0.0, init_phi = 0.0;
@@ -46,8 +48,17 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t
         double vl = init_vl, vr = init_vr;
         // Se generan aceleraciones iniciales aleatorias para cada llanta en el rango [-0.5, 0.5]
         double u1 = -0.5 + ((double)rand() / (double)RAND_MAX) * 1.0;
-        double u2 = -0.5 + ((double)rand() / (double)RAND_MAX) * 1.0;
+        //double u2 = -0.5 + ((double)rand() / (double)RAND_MAX) * 1.0;
 
+        // Se genera una variación pequeña en el rango [-0.05, 0.05]
+        double variacion = -0.05 + ((double)rand() / RAND_MAX) * 0.1;
+
+        // Se obtiene u2 añadiéndole la variación a u1
+        double u2 = u1 + variacion;
+
+        // Se asegura que u2 se mantenga en el rango [-0.5, 0.5]
+        if (u2 > 0.5) u2 = 0.5;
+        if (u2 < -0.5) u2 = -0.5;
 
         // Guardamos las condiciones iniciales del genotipo
         poblacion->individuos[i].genotipo_izquierdo[0] = u1;
@@ -55,7 +66,11 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t
 
         // Calculamos la distancia inicial al objetivo
         double prev_distance = sqrt((x - target_x) * (x - target_x) +
-                                          (y - target_y) * (y - target_y));
+                                    (y - target_y) * (y - target_y));
+
+        // Inicializamos variables para el controlador PID
+        double integral_error = 0.0;
+        double previous_error = 0.0;
 
         // Para cada instante de tiempo (a partir del segundo) se simula la acción del controlador
         for (int j = 1; j < longitud_genotipo; j++)
@@ -65,13 +80,13 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t
 
             // Se calcula la distancia actual al objetivo
             double current_distance = sqrt((x - target_x) * (x - target_x) +
-                                                 (y - target_y) * (y - target_y));
+                                           (y - target_y) * (y - target_y));
 
-            // Si la distancia aumenta, se aplica la heurística kp para corregir la trayectoria
+            // Si la distancia aumenta, se aplica la acción del controlador PID
             if (current_distance > prev_distance)
             {
                 // Se calcula el ángulo deseado hacia el objetivo
-                double desired_angle = atan2l(target_y - y, target_x - x);
+                double desired_angle = atan2(target_y - y, target_x - x);
                 // Se determina el error entre el ángulo deseado y la orientación actual
                 double error_angle = desired_angle - phi_val;
                 // Normalizamos error_angle al rango [-pi, pi]
@@ -80,8 +95,14 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t
                 while (error_angle < -M_PI)
                     error_angle += 2.0 * M_PI;
 
-                // Calculamos el ajuste basado en el controlador proporcional
-                double adjustment = k * error_angle;
+                // Se acumula el error para el término integral
+                integral_error += error_angle * delta_t;
+                // Se calcula el término derivativo
+                double derivative_error = (error_angle - previous_error) / delta_t;
+                previous_error = error_angle;
+
+                // Se calcula el ajuste basado en la suma de los términos PID
+                double adjustment = kP * error_angle + kI * integral_error + kD * derivative_error;
 
                 // Ajustamos las aceleraciones: se disminuye u1 e incrementa u2 (o viceversa)
                 u1 -= adjustment;
