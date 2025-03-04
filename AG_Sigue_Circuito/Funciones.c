@@ -26,106 +26,86 @@ poblacion *inicializar_poblacion(int tamano, int longitud_genotipo)
     return Poblacion;
 }
 
-void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, double cord_obj_x, double cord_obj_y)
+void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
-    // Parámetros de la simulación y del controlador PID
-    double kP = 0.3;  // ganancia proporcional
-    double kI = 0.1;  // ganancia integral
-    double kD = 0.05; // ganancia derivativa
+    double kP = 0.00003, kI = 0.000000001, kD = 0.0000000001;
 
-    // Condiciones iniciales para cada simulación individual
-    double init_x = 0.0, init_y = 0.0, init_phi = 0.0;
-    double init_vl = 0.0, init_vr = 0.0;
-    // Definimos el objetivo (target) al que se desea llegar
-    double target_x = cord_obj_x, target_y = cord_obj_y;
-
-    // Para cada individuo de la población
     for (int i = 0; i < poblacion->tamano; i++)
     {
-        // Se inicializan las variables de estado para cada individuo
-        double x = init_x, y = init_y, phi_val = init_phi;
-        double vl = init_vl, vr = init_vr;
-        // Se generan aceleraciones iniciales aleatorias para cada llanta en el rango [limite_inferior, limite_superior]
-        double u1 = limite_inferior + ((double)rand() / (double)RAND_MAX) * 1.0;
-        // double u2 = limite_inferior + ((double)rand() / (double)RAND_MAX) * 1.0;
+        double x = 0.0, y = 0.0, phi_val = 0.0, vl = 0.0, vr = 0.0;
+        int objetivo_actual = 0;
+        double integral_error = 0.0, previous_error = 0.0;
 
-        // Se genera una variación pequeña en el rango [-0.05, 0.05]
+        // Inicializar u1 y u2 como antes
+        double u1 = limite_inferior + ((double)rand() / RAND_MAX) * 1.0;
         double variacion = -0.05 + ((double)rand() / RAND_MAX) * 0.1;
-
-        // Se obtiene u2 añadiéndole la variación a u1
         double u2 = u1 + variacion;
 
-        // Se asegura que u2 se mantenga en el rango [limite_inferior, limite_superior]
+        // Asegurar u2 en rango
         if (u2 > limite_superior)
             u2 = limite_superior;
         if (u2 < limite_inferior)
             u2 = limite_inferior;
 
-        // Guardamos las condiciones iniciales del genotipo
+        // Inicializar prev_distance al primer objetivo
+        double dx_initial = objetivos[0].x - x;
+        double dy_initial = objetivos[0].y - y;
+        double prev_distance = sqrt(dx_initial * dx_initial + dy_initial * dy_initial);
+
         poblacion->individuos[i].genotipo_izquierdo[0] = u1;
         poblacion->individuos[i].genotipo_derecho[0] = u2;
 
-        // Calculamos la distancia inicial al objetivo
-        double prev_distance = sqrt((x - target_x) * (x - target_x) +
-                                    (y - target_y) * (y - target_y));
-
-        // Inicializamos variables para el controlador PID
-        double integral_error = 0.0;
-        double previous_error = 0.0;
-
-        // Para cada instante de tiempo (a partir del segundo) se simula la acción del controlador
         for (int j = 1; j < longitud_genotipo; j++)
         {
-            // Se actualiza el estado del robot (posición, orientación, velocidades y aceleraciones)
             runge_kutta(delta_t, &x, &y, &phi_val, &vl, &vr, &u1, &u2, B);
+            // Normalizar phi_val
+            while (phi_val > M_PI) phi_val -= 2 * M_PI;
+            while (phi_val < -M_PI) phi_val += 2 * M_PI;
 
-            // Se calcula la distancia actual al objetivo
-            double current_distance = sqrt((x - target_x) * (x - target_x) +
-                                           (y - target_y) * (y - target_y));
+            double dx = objetivos[objetivo_actual].x - x;
+            double dy = objetivos[objetivo_actual].y - y;
+            double distancia_actual = sqrt(dx * dx + dy * dy);
 
-            // Si la distancia aumenta, se aplica la acción del controlador PID
-            if (current_distance > prev_distance)
+            // Cambiar de objetivo si es necesario
+            if (distancia_actual < distancia_umbral && objetivo_actual < num_objetivos - 1)
             {
-                // Se calcula el ángulo deseado hacia el objetivo
-                double desired_angle = atan2(target_y - y, target_x - x);
-                // Se determina el error entre el ángulo deseado y la orientación actual
-                double error_angle = desired_angle - phi_val;
-                // Normalizamos error_angle al rango [-pi, pi]
-                while (error_angle > M_PI)
-                    error_angle -= 2.0 * M_PI;
-                while (error_angle < -M_PI)
-                    error_angle += 2.0 * M_PI;
-
-                // Se acumula el error para el término integral
-                integral_error += error_angle * delta_t;
-                // Se calcula el término derivativo
-                double derivative_error = (error_angle - previous_error) / delta_t;
-                previous_error = error_angle;
-
-                // Se calcula el ajuste basado en la suma de los términos PID
-                double adjustment = kP * error_angle + kI * integral_error + kD * derivative_error;
-
-                // Ajustamos las aceleraciones: se disminuye u1 e incrementa u2 (o viceversa)
-                u1 -= adjustment;
-                u2 += adjustment;
-
-                // Se limitan las aceleraciones al rango permitido [limite_inferior, limite_superior]
-                if (u1 > limite_superior)
-                    u1 = limite_superior;
-                if (u1 < limite_inferior)
-                    u1 = limite_inferior;
-                if (u2 > limite_superior)
-                    u2 = limite_superior;
-                if (u2 < limite_inferior)
-                    u2 = limite_inferior;
+                objetivo_actual++;
+                integral_error = 0.0;
+                previous_error = 0.0; 
             }
 
-            // Se guarda el par de aceleraciones calculado en el genotipo del individuo
+            double desired_angle = atan2(objetivos[objetivo_actual].y - y, objetivos[objetivo_actual].x - x);
+            double error_angle = desired_angle - phi_val;
+            // Normalizar error_angle...
+            while (error_angle > M_PI)
+                error_angle -= 2 * M_PI;
+            while (error_angle < -M_PI)
+                error_angle += 2 * M_PI;
+
+            integral_error += error_angle * delta_t;
+            double derivative_error = (error_angle - previous_error) / delta_t;
+            previous_error = error_angle;
+
+            //double adjustment = kP * error_angle + kI * integral_error + kD * derivative_error;
+            double adjustment = kP * error_angle;
+            u1 -= adjustment;
+            u2 += adjustment;
+
+            // Limitar u1 y u2...
+            if (u1 > limite_superior)
+                u1 = limite_superior;
+            if (u1 < limite_inferior)
+                u1 = limite_inferior;
+            if (u2 > limite_superior)
+                u2 = limite_superior;
+            if (u2 < limite_inferior)
+                u2 = limite_inferior;
+
+            // Guardar en genotipo
             poblacion->individuos[i].genotipo_izquierdo[j] = u1;
             poblacion->individuos[i].genotipo_derecho[j] = u2;
 
-            // Se actualiza la distancia previa para la siguiente iteración
-            prev_distance = current_distance;
+            prev_distance = distancia_actual; // Actualizar para la próxima iteración
         }
     }
 }
@@ -133,37 +113,55 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t
 // Evalua la población
 // Recibe un puntero a la población y la longitud del genotipo
 // No devuelve nada (todo se hace por referencia)
-void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double cord_obj_x, double cord_obj_y)
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
     // Evalua cada individuo de la población
     for (int i = 0; i < poblacion->tamano; i++)
     {
-        poblacion->individuos[i].fitness = evaluar_individuo(poblacion->individuos[i].genotipo_izquierdo, poblacion->individuos[i].genotipo_derecho, longitud_genotipo, delta_t, B, cord_obj_x, cord_obj_y);
+        poblacion->individuos[i].fitness = evaluar_individuo(poblacion->individuos[i].genotipo_izquierdo, poblacion->individuos[i].genotipo_derecho, longitud_genotipo, delta_t, B, objetivos, num_objetivos, distancia_umbral);
     }
 }
 
 // Función para calcular la distancia total recorrida por el individuo (fitness)
 // Recibe un genotipo y la longitud del genotipo
-// Devuelve el fitness del individuo
-double evaluar_individuo(double *u1, double *u2, int longitud_genotipo, double delta_t, double B, double cord_obj_x, double cord_obj_y)
+double evaluar_individuo(double *u1, double *u2, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
     double total_cost = 0.0;
-    double condicion_inicial_x = 0.0;
-    double condicion_inicial_y = 0.0;
-    double condicion_inicial_phi = 0.0;
-    double condicion_inicial_vl = 0.0;
-    double condicion_inicial_vr = 0.0;
-    double condicion_inicial_u1;
-    double condicion_inicial_u2;
+    double x = 0.0, y = 0.0, phi = 0.0, vl = 0.0, vr = 0.0;
+    int objetivo_actual = 0;
 
     for (int i = 0; i < longitud_genotipo; i++)
     {
-        condicion_inicial_u1 = u1[i];
-        condicion_inicial_u2 = u2[i];
-        runge_kutta(delta_t, &condicion_inicial_x, &condicion_inicial_y, &condicion_inicial_phi, &condicion_inicial_vl, &condicion_inicial_vr, &condicion_inicial_u1, &condicion_inicial_u2, B);
+        double u1_val = u1[i];
+        double u2_val = u2[i];
+        runge_kutta(delta_t, &x, &y, &phi, &vl, &vr, &u1_val, &u2_val, B);
+
+        // Calcular distancia al objetivo actual
+        double dx = objetivos[objetivo_actual].x - x;
+        double dy = objetivos[objetivo_actual].y - y;
+        double distancia = sqrt(dx * dx + dy * dy);
+
+        // Si está cerca, avanzar al siguiente objetivo (si no es el último)
+        if (distancia < distancia_umbral && objetivo_actual < num_objetivos - 1)
+        {
+            objetivo_actual++;
+        }
     }
-    // Calculamos la distancia actual al punto objetivo
-    total_cost = sqrt((condicion_inicial_x - cord_obj_x) * (condicion_inicial_x - cord_obj_x) + (condicion_inicial_y - cord_obj_y) * (condicion_inicial_y - cord_obj_y));
+
+    if (objetivo_actual == num_objetivos - 1)
+    {
+        // El fitness es la distancia al último punto objetivo
+        double dx_final = objetivos[num_objetivos - 1].x - x;
+        double dy_final = objetivos[num_objetivos - 1].y - y;
+        total_cost = sqrt(dx_final * dx_final + dy_final * dy_final);
+    }
+    else{
+        // El fitness es la distancia al último punto objetivo penalizada
+        double dx_final = objetivos[num_objetivos - 1].x - x;
+        double dy_final = objetivos[num_objetivos - 1].y - y;
+        total_cost = sqrt(dx_final * dx_final + dy_final * dy_final);
+        total_cost = total_cost * 10;
+    }
 
     return total_cost;
 }
@@ -297,7 +295,7 @@ void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_
 }
 
 // Función de cruzamiento con SBX y selección de los mejores dos entre padres e hijos
-void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B, double limite_inferior, double limite_superior, double nc, double cord_obj_x, double cord_obj_y)
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B, double limite_inferior, double limite_superior, double nc, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
     // Se asume que num_pob es par.
     for (int i = 0; i < num_pob; i += 2)
@@ -359,7 +357,7 @@ void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int lon
         // Evaluar a cada uno de los 4 individuos temporales
         for (int k = 0; k < 4; k++)
         {
-            temp[k].fitness = evaluar_individuo(temp[k].u1, temp[k].u2, longitud_genotipo, delta_t, B, cord_obj_x, cord_obj_y);
+            temp[k].fitness = evaluar_individuo(temp[k].u1, temp[k].u2, longitud_genotipo, delta_t, B, objetivos, num_objetivos, distancia_umbral);
         }
 
         // Seleccionar los dos individuos con menor fitness (mejor aptitud)

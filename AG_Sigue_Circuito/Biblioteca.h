@@ -22,21 +22,27 @@ typedef struct{
     int tamano;
 }poblacion;
 
+// Estructura para punto objetivo (x,y)
+typedef struct {
+    double x;
+    double y;
+} PuntoObjetivo;
+
 //Funciones principales del algoritmo genético
 //Asigna memoria para una población
 poblacion *inicializar_poblacion(int tamano, int longitud_genotipo);
 //Crea valores aleatorios para los genotipos de los individuos de la poblacion
-void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, double cord_obj_x, double cord_obj_y);
+void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
 //Evalúa a la población
-void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double cord_obj_x, double cord_obj_y);
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
 //Evalúa a un individuo
-double evaluar_individuo(double*u1, double *u2, int longitud_genotipo, double delta_t, double B, double cord_obj_x, double cord_obj_y);
+double evaluar_individuo(double *u1, double *u2, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
 //Ordena a la población de acuerdo a su fitness mediante el algoritmo de introsort
 void ordenar_poblacion(poblacion *poblacion);
 //Selecciona a los padres de la población mediante un torneo de fitness
 void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_competidores, int longitud_genotipo);
 //Cruza a los padres para generar a los hijos dependiendo de una probabilidad de cruce
-void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B, double limite_inferior, double limite_superior, double nc, double cord_obj_x, double cord_obj_y);
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B, double limite_inferior, double limite_superior, double nc, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
 //Muta a un individuo dependiendo de una probabilidad de mutación
 void mutar_individuo(individuo *individuo, double probabilidad_mutacion, int longitud_genotipo, double limite_inferior, double limite_superior, double nm);
 //Actualiza a la población con los nuevos individuos (hijos)
