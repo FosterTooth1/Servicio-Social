@@ -9,31 +9,26 @@ int main(int argc, char **argv)
     srand(time(NULL));
     int tamano_poblacion = 5000;
     double delta_t = 0.01;
-    double tiempo_test = 8.0;
+    double tiempo_test = 3.0;
     int longitud_genotipo = tiempo_test / delta_t;
-    int num_generaciones = 300;
-    int num_competidores = 50;
     double limite_inferior = -0.5;
     double limite_superior = 0.5;
-    double probabilidad_mutacion = 0.3;
-    double probabilidad_cruce = 0.9;
     double B = 0.2;
-    double nc = 10; // SBX (0-20) //Mas alto es mas explotacion
-    double nm = 60; // Polinomial (20-100)
     double distancia_umbral = 0.1;
     
+    /*
     // Definir puntos objetivo (ejemplo)
     PuntoObjetivo objetivos[] = {
          {2.0, 3.0},
          {5.0, 7.0},
          {8.0, 10.0}};
     int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
-    
+    */
    
    // Definir puntos objetivo (ejemplo)
-    //PuntoObjetivo objetivos[] = {
-    //    {2.0, 3.0}};
-    //int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
+    PuntoObjetivo objetivos[] = {
+        {2.0, 3.0}};
+    int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
     
     printf("%d", num_objetivos);
 
@@ -68,42 +63,6 @@ int main(int argc, char **argv)
 
     // Copiamos el fitness del mejor individuo
     Mejor_Individuo->fitness = Poblacion->individuos[0].fitness;
-    /*
-    // Ejecutamos el algoritmo genético
-    for (int generacion = 0; generacion < num_generaciones; generacion++)
-    {
-        // Seleccionamos a los padres
-        seleccionar_padres_torneo(Poblacion, padres, num_competidores, longitud_genotipo);
-
-        // Cruzamos a los padres
-        cruzar_individuos(padres, hijos, tamano_poblacion, longitud_genotipo, probabilidad_cruce, delta_t, B, limite_inferior, limite_superior, nc, objetivos, num_objetivos, distancia_umbral);
-
-        // Mutamos a los hijos
-        for (int i = 0; i < tamano_poblacion; i++)
-        {
-            mutar_individuo(&hijos->individuos[i], probabilidad_mutacion, longitud_genotipo, limite_inferior, limite_superior, nm);
-        }
-
-        // Reemplazamos la población actual con los hijos
-        actualizar_poblacion(&Poblacion, hijos, longitud_genotipo);
-
-        // Evaluamos a los hijos
-        evaluar_poblacion(Poblacion, longitud_genotipo, delta_t, B, objetivos, num_objetivos, distancia_umbral);
-        ordenar_poblacion(Poblacion);
-
-        // Actualizamos al mejor individuo si es necesario
-        if (Poblacion->individuos[0].fitness < Mejor_Individuo->fitness)
-        {
-            for (int i = 0; i < longitud_genotipo; i++)
-            {
-                Mejor_Individuo->genotipo_izquierdo[i] = Poblacion->individuos[0].genotipo_izquierdo[i];
-                Mejor_Individuo->genotipo_derecho[i] = Poblacion->individuos[0].genotipo_derecho[i];
-            }
-            Mejor_Individuo->fitness = Poblacion->individuos[0].fitness;
-        }
-    }
-
-    */
 
     // Imprimimos al mejor individuo
     printf("Fitness del mejor individuo: %Lf\n", Mejor_Individuo->fitness);
