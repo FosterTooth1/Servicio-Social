@@ -28,7 +28,7 @@ poblacion *inicializar_poblacion(int tamano, int longitud_genotipo)
 
 void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
-    double kP = 3.7, kI = 1.8, kD = 0.62;
+    double kP = 0.00003, kI = 0.000000001, kD = 0.0000000001;
 
     for (int i = 0; i < poblacion->tamano; i++)
     {

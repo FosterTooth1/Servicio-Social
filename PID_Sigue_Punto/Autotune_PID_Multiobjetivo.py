@@ -1,14 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import differential_evolution
-import csv
+from scipy.integrate import solve_ivp
 from datetime import datetime
-from multiprocessing import Pool, cpu_count
-import os
-import numpy as np
-from scipy.optimize import differential_evolution
-from functools import partial
-
+import csv
+# Asegúrate de tener instalado pymoo:
+# pip install pymoo
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.optimize import minimize
+from multiprocessing.pool import ThreadPool
+from pymoo.core.problem import ElementwiseProblem
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 # =============================
 # Configuración de parámetros
 # =============================
@@ -30,7 +32,7 @@ max_wheel_velocity = radius * max_rads  # ≈ 0.7854 m/s
 # 3848.246314390027237e+03,-1.296894160712108487e+03
 
 def load_waypoints(csv_filename):
-    # Lee todas las columnas del CSV, omitiendo la cabecera
+    # Usamos numpy para leer el CSV, omitiendo la cabecera
     return np.genfromtxt(csv_filename, delimiter=',', skip_header=1)
 
 # Cargar waypoints
@@ -38,14 +40,13 @@ waypoints = load_waypoints("pista_escalada.csv")
 
 # Actualizar la posición inicial del robot usando la primera coordenada del CSV.
 # En el vector de estado, la posición se representa como [y, x] en las posiciones 3 y 4.
-# Actualizar la posición inicial usando la ruta central (primeras dos columnas)
 x0 = waypoints[0, 0]
 y0 = waypoints[0, 1]
 
 config = {
     'B': 0.2,              # Ancho del auto
     'dt': 0.01,            # Paso de tiempo (segundos)
-    'N_steps': 1000000,      # Número máximo de pasos de simulación
+    'N_steps': 5000000,      # Número máximo de pasos de simulación
     'Xe0': np.array([0, 0, 0, y0, x0]),  # Estado inicial ajustado al primer waypoint
     'base_acc': 0.1,       # Aceleración base (para avanzar)
     'max_acc': 0.7854      # Aceleración máxima permitida
@@ -78,7 +79,7 @@ class PIDController:
         derivative = (error - self.prev_error) / self.dt
         self.prev_error = error
         return self.Kp * error + self.Ki * self.integral + self.Kd * derivative
-
+    
 
 # =============================
 # Dinámica del robot (sin cambios)
@@ -102,7 +103,7 @@ def runge_kutta_step(t, Xe, Xc, dt, B):
 # =============================
 # Simulación principal mejorada
 # =============================
-def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
+def lego_robot_simulation(params, waypoints, pid_params=None, visualize=False):
     B = params['B']
     dt = params['dt']
     N_steps = params['N_steps']
@@ -193,79 +194,158 @@ def update_plot(ax, Xe_current, waypoint, k_values, dt):
     pos_x = Xe_current[4]
     pos_y = Xe_current[3]
     theta = Xe_current[2]
-    
+
     ax.clear()
-    # Combinar todas las coordenadas X e Y de la ruta central y sus límites para definir los ejes
-    x_all = np.concatenate([waypoints[:,0], waypoints[:,2], waypoints[:,4]])
-    y_all = np.concatenate([waypoints[:,1], waypoints[:,3], waypoints[:,5]])
-    ax.set_xlim(np.min(x_all) - 100, np.max(x_all) + 100)
-    ax.set_ylim(np.min(y_all) - 100, np.max(y_all) + 100)
+    # Ajustar límites para visualizar los waypoints grandes, o bien escalarlos según se requiera.
+    ax.set_xlim(np.min(waypoints[:,0]) - 100, np.max(waypoints[:,0]) + 100)
+    ax.set_ylim(np.min(waypoints[:,1]) - 100, np.max(waypoints[:,1]) + 100)
     ax.grid(True)
     
-    # Dibujar la ruta central
-    ax.plot(waypoints[:,0], waypoints[:,1], 'kx--', label='Ruta central')
-    # Dibujar límite interno (segunda columna de par de coordenadas)
-    ax.plot(waypoints[:,2], waypoints[:,3], 'b--', label='Límite interno')
-    # Dibujar límite externo (tercera columna de par de coordenadas)
-    ax.plot(waypoints[:,4], waypoints[:,5], 'g--', label='Límite externo')
-    
-    # Dibujar el waypoint actual (usando la ruta central)
+    # Dibujar trayectoria planeada
+    ax.plot(waypoints[:,0], waypoints[:,1], 'kx--', label='Ruta planeada')
     ax.plot(waypoint[0], waypoint[1], 'ro', markersize=10, label='Objetivo actual')
-    # Dibujar la posición actual del robot
+    
+    # Dibujar robot
     ax.plot(pos_x, pos_y, 'bo', markersize=8, label='Posición actual')
     
-    # Dibujar flecha de orientación
+    # Dibujar orientación
     arrow_length = 0.5
-    ax.arrow(pos_x, pos_y,
-             arrow_length*np.cos(theta),
-             arrow_length*np.sin(theta),
-             head_width=0.2, head_length=0.3,
-             fc='g', ec='g', label='Orientación')
+    ax.arrow(pos_x, pos_y, 
+             arrow_length*np.cos(theta), arrow_length*np.sin(theta),
+             head_width=0.2, head_length=0.3, fc='g', ec='g', label='Orientación')
     
     ax.legend(loc='upper right')
     plt.draw()
-
-# =============================
-# Función principal
-# =============================
-def main():
-    print("Cargando waypoints desde CSV...")
-    # Los waypoints ya fueron cargados globalmente y la posición inicial actualizada en config.
-    print(f"Waypoints cargados: {len(waypoints)} puntos")
-    print("Iniciando autotuning PID...")
-    #optimized_pid = autotune_pid(config, waypoints)
-    optimized_pid = 7.1, 3.2, 3.36  # Valores de PID optimizados para la simulación
-    print(f"\nParámetros óptimos encontrados:")
-    print(f"Kp = {optimized_pid[0]:.2f}")
-    print(f"Ki = {optimized_pid[1]:.2f}")
-    print(f"Kd = {optimized_pid[2]:.2f}")
     
-    # Guardar en CSV
-    filename = "pid_optimized.csv"
+# ===============================
+# Definir la función multiobjetivo
+# ===============================
+def evaluate_pid(pid_params):
+    try:
+        # Convertir parámetros a float explícitamente
+        Kp, Ki, Kd = map(float, pid_params)
+        Xe, t, _ = lego_robot_simulation(
+            config, 
+            waypoints, 
+            pid_params=(Kp, Ki, Kd), 
+            visualize=False
+        )
+        
+        # Cálculo optimizado de métricas
+        completed = False
+        errors = []
+        steps = len(t)
+        
+        for i, state in enumerate(Xe):
+            if i >= len(t) or completed:
+                break
+                
+            pos_x, pos_y = state[4], state[3]
+            current_wp = waypoints[min(i, len(waypoints)-1)]
+            
+            error_distance = np.hypot(current_wp[0]-pos_x, current_wp[1]-pos_y)
+            errors.append(error_distance)
+            
+            if error_distance < dist_threshold and i < len(waypoints)-1:
+                current_wp = waypoints[i+1]
+
+        mean_error = np.mean(errors) if errors else 1e6
+        max_error = np.max(errors) if errors else 1e6
+        completed = len(errors) >= len(waypoints)
+        
+        return (mean_error, max_error, steps) if completed else (1e6, 1e6, 1e6)
+        
+    except Exception as e:
+        print(f"Error crítico en evaluación: {str(e)}")
+        return 1e6, 1e6, 1e6
+
+# ====================================
+# Definir el problema para pymoo
+# ====================================
+class PIDOptimizationProblem(ElementwiseProblem):
+    def __init__(self):
+        super().__init__(
+            n_var=3,
+            n_obj=3,
+            xl=np.array([0.1, 0.0, 0.0]),
+            xu=np.array([10.0, 5.0, 5.0])
+        )
+        
+    def _evaluate(self, x, out, *args, **kwargs):
+        try:
+            f1, f2, f3 = evaluate_pid(x)
+            out["F"] = [f1, f2, f3]
+        except Exception as e:
+            print(f"Error en evaluación: {str(e)}")
+            out["F"] = [1e6, 1e6, 1e6]
+
+# ====================================
+# Ejecutar NSGA-II
+# ====================================
+def optimize_pid_nsga2():
+    
+    problem = PIDOptimizationProblem()
+    executor = ProcessPoolExecutor(max_workers=14)  # Usa procesos
+    problem.runner = executor.map
+    
+    algorithm = NSGA2(
+        pop_size=14,
+        eliminate_duplicates=True
+    )
+    
+    res = minimize(problem,
+                   algorithm,
+                   ('n_gen', 1),
+                   seed=42,
+                   verbose=True)
+    
+    # Cerrar el executor al finalizar
+    executor.shutdown()
+    return res
+
+# ====================================
+# Función principal modificada
+# ====================================
+def main_nsga2():
+    print("Cargando waypoints desde CSV...")
+    print(f"Waypoints cargados: {len(waypoints)} puntos")
+    print("Iniciando optimización multiobjetivo NSGA-II...")
+    
+    res = optimize_pid_nsga2()
+    
+    print("\nFrente Pareto obtenido:")
+    for sol, f in zip(res.X, res.F):
+        print(f"Parámetros: Kp={sol[0]:.2f}, Ki={sol[1]:.2f}, Kd={sol[2]:.2f} => Objetivos: {f}")
+    
+    # Opcional: seleccionar la solución que cumpla mejor con un criterio de compromiso
+    # Por ejemplo, la que minimice la suma de los tres objetivos
+    sums = np.sum(res.F, axis=1)
+    best_idx = np.argmin(sums)
+    best_params = res.X[best_idx]
+    
+    print(f"\nParámetros seleccionados: Kp={best_params[0]:.2f}, Ki={best_params[1]:.2f}, Kd={best_params[2]:.2f}")
+    
+    # Guardar resultados en CSV
+    filename = "pid_optimized_nsga2.csv"
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
-        
-        # Escribir encabezado
         writer.writerow(["Timestamp", "Kp", "Ki", "Kd", "Waypoints"])
-        
-        # Escribir datos
         writer.writerow([
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            f"{optimized_pid[0]:.2f}",
-            f"{optimized_pid[1]:.2f}",
-            f"{optimized_pid[2]:.2f}",
+            f"{best_params[0]:.2f}",
+            f"{best_params[1]:.2f}",
+            f"{best_params[2]:.2f}",
             len(waypoints)
         ])
-    
-    print(f"\nResultados guardados en {filename}")
+    print(f"Resultados guardados en {filename}")
 
-    print("\nEjecutando simulación final con parámetros optimizados...")
+    print("Ejecutando simulación final con parámetros optimizados NSGA-II...")
     lego_robot_simulation(
         config, 
         waypoints, 
-        pid_params=optimized_pid, 
+        pid_params=best_params, 
         visualize=True
     )
 
 if __name__ == "__main__":
-    main()
+    main_nsga2()

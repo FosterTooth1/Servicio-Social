@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from svgpathtools import svg2paths
 
 # Parámetros
-ancho_extra = 10  # Ancho de la línea extra
+ancho_extra = 1  # Ancho de la línea extra
 
 # Cargar el archivo SVG
-svg_file = "Pistas Limpias/Autódromo_Oscar_y_Juan_Gálvez_Circuito_N°_15 (Limpia).svg"
+svg_file = "Pistas Limpias/Autódromo_Hermanos_Rodríguez_2015 (Limpia).svg"
 paths, attributes = svg2paths(svg_file)
 
 # Extraer coordenadas del path
@@ -40,8 +40,8 @@ scale_factor = desired_length / original_length
 print(f"Factor de escala: {scale_factor:.6f}")
 
 # Aplicar el factor de escala
-x_scaled = x_coords * scale_factor
-y_scaled = y_coords * scale_factor
+x_scaled = x_coords * scale_factor / 10  # Reescalar de una escala de 10 metros a 1 metro
+y_scaled = y_coords * scale_factor / 10  # Reescalar de una escala de 10 metros a 1 metro
 
 # Calcular los vectores tangentes
 dx = np.gradient(x_scaled)

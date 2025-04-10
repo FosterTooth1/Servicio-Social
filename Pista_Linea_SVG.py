@@ -4,7 +4,7 @@ from svgpathtools import svg2paths
 
 # Parámetros
 ancho_extra = 10  # Ancho de la línea extra (no se usa en este ejemplo)
-num_points = 50  # Número deseado de puntos (puedes cambiarlo a 50, 500, 1000, etc.)
+num_points = 120  # Número deseado de puntos (puedes cambiarlo a 50, 500, 1000, etc.)
 
 # Cargar el archivo SVG
 svg_file = "Pistas Limpias/Autódromo_Hermanos_Rodríguez_2015 (Limpia).svg"
@@ -56,7 +56,7 @@ y_sampled = y_final[indices]
 # Graficar el circuito escalado y reescalado
 plt.figure(figsize=(10, 10))
 plt.plot(x_final, y_final, color="lightgray", linewidth=1, label="Todo el circuito")
-plt.plot(x_sampled, y_sampled, color="black", linewidth=2, label=f"{num_points} puntos")
+plt.plot(x_sampled, y_sampled, color="r", linewidth=2, label=f"{num_points} puntos")
 plt.axis("equal")
 plt.legend()
 plt.show()

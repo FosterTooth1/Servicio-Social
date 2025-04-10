@@ -1,4 +1,90 @@
-#include "Biblioteca.h"
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<time.h>
+#include<math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+// Estructuras
+// Estructura para un individuon (Almacena el genotipo izquierdo y dreceho del robot y el fitness)
+typedef struct{
+    double *genotipo_izquierdo;
+    double *genotipo_derecho;
+    double fitness;
+    int num_pasos;
+    double kp;
+    double ki;
+    double kd;
+}individuo;
+
+// Estructura para una población (Almacena un arreglo de individuos y su tamaño)
+typedef struct{
+    individuo *individuos;
+    int tamano;
+}poblacion;
+
+// Estructura para punto objetivo (x,y)
+typedef struct {
+    double x;
+    double y;
+} PuntoObjetivo;
+
+//Funciones principales del algoritmo genético
+//Asigna memoria para una población
+poblacion *inicializar_poblacion(int tamano, int longitud_genotipo);
+//Crea valores aleatorios para los genotipos de los individuos de la poblacion
+void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
+//Evalúa a la población
+void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
+//Evalúa a un individuo
+double evaluar_individuo(double *u1, double *u2, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
+//Ordena a la población de acuerdo a su fitness mediante el algoritmo de introsort
+void ordenar_poblacion(poblacion *poblacion);
+//Selecciona a los padres de la población mediante un torneo de fitness
+void seleccionar_padres_torneo(poblacion *Poblacion, poblacion *padres, int num_competidores, int longitud_genotipo);
+//Cruza a los padres para generar a los hijos dependiendo de una probabilidad de cruce
+void cruzar_individuos(poblacion *padres, poblacion *hijos, int num_pob, int longitud_genotipo, double probabilidad_cruce, double delta_t, double B, double limite_inferior, double limite_superior, double nc, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral);
+//Muta a un individuo dependiendo de una probabilidad de mutación
+void mutar_individuo(individuo *individuo, double probabilidad_mutacion, int longitud_genotipo, double limite_inferior, double limite_superior, double nm);
+//Actualiza a la población con los nuevos individuos (hijos)
+void actualizar_poblacion(poblacion **destino, poblacion *origen, int longitud_genotipo);
+//Libera la memoria usada para la población
+void liberar_poblacion(poblacion *poblacion);
+
+//Funciones auxiliares del cruzamiento
+// Función SBX para un solo gen (una variable)
+// Recibe el valor del gen de cada padre, y genera dos hijos
+void sbx_crossover(double parent1, double parent2, double *child1, double *child2,
+    double nc, double limite_inferior, double limite_superior);
+
+//Funciones auxiliares de ordenamiento
+// Introsort es un algoritmo de ordenamiento híbrido que combina QuickSort, HeapSort e InsertionSort
+void introsort_util(individuo *arr, int *profundidad_max, int inicio, int fin);
+//Calcula el logaritmo base 2 de un número para medir la profundidad de recursividad que puede alcanzar QuickSort
+int log2_suelo(int n);
+//Particiona el arreglo para el QuickSort (Funcion auxiliar de Introsort en especifico para el QuickSort)
+int particion(individuo *arr, int bajo, int alto);
+//Calcula la mediana de tres elementos (Funcion auxiliar de Introsort en especifico para el QuickSort)
+int mediana_de_tres(individuo *arr, int a, int b, int c);
+//Intercambia dos individuos (Funcion auxiliar de Introsort en especifico para el QuickSort)
+void intercambiar_individuos(individuo *a, individuo *b);
+//Insertion sort es un algoritmo de ordenamiento simple y eficiente para arreglos pequeños
+void insertion_sort(individuo *arr, int izquierda, int derecha);
+//Heapsort es un algoritmo de ordenamiento basado en árboles binarios
+void heapsort(individuo *arr, int n);
+//Heapify es una función auxiliar para heapsort
+void heapify(individuo *arr, int n, int i);
+
+//Runge Kutta
+void runge_kutta(double delta_t, double* condicion_inicial_x, double* condicion_inicial_y, double* condicion_inicial_phi, double* condicion_inicial_vl, double* condicion_inicial_vr, double* condicion_inicial_u1, double* condicion_inicial_u2, double B);
+double x(double vl, double vr, double phi);
+double y(double vl, double vr, double phi);
+double phi(double vl, double vr, double B);
+
+void imprimir_poblacion(poblacion *p, int longitud_genotipo);
 
 // Funciones principales del algoritmo genético
 
@@ -22,30 +108,40 @@ poblacion *inicializar_poblacion(int tamano, int longitud_genotipo)
 
         // Inicializa el fitness en 0
         Poblacion->individuos[i].fitness = 0;
+
+        // Inicializa el numero de pasos en 0
+        Poblacion->individuos[i].fitness = 0;
+
+        // Inicializa el valor de kp, ki y kd en 0
+        Poblacion->individuos[i].kp = 0;
+        Poblacion->individuos[i].ki = 0;
+        Poblacion->individuos[i].kd = 0;
     }
     return Poblacion;
 }
 
 void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t, double B, double limite_inferior, double limite_superior, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
-    double kP = 0.00003, kI = 0.000000001, kD = 0.0000000001;
-
     for (int i = 0; i < poblacion->tamano; i++)
     {
+        // Inicializar variables aleatorias para kp, ki y kd
+        double kP = ((double)rand() / RAND_MAX) * 10.0;
+        double kI = ((double)rand() / RAND_MAX) * 5.0;
+        double kD = ((double)rand() / RAND_MAX) * 5.0;
+
+        // Guardar los valores de kp, ki y kd en el individuo
+        poblacion->individuos[i].kp = kP;
+        poblacion->individuos[i].ki = kI;
+        poblacion->individuos[i].kd = kD;
+
         double x = 0.0, y = 0.0, phi_val = 0.0, vl = 0.0, vr = 0.0;
         int objetivo_actual = 0;
+        int target_reached = 0;  // Bandera para verificar si se alcanzó el último objetivo
         double integral_error = 0.0, previous_error = 0.0;
 
-        // Inicializar u1 y u2 como antes
-        double u1 = limite_inferior + ((double)rand() / RAND_MAX) * 1.0;
-        double variacion = -0.05 + ((double)rand() / RAND_MAX) * 0.1;
-        double u2 = u1 + variacion;
-
-        // Asegurar u2 en rango
-        if (u2 > limite_superior)
-            u2 = limite_superior;
-        if (u2 < limite_inferior)
-            u2 = limite_inferior;
+        // Inicializar u1 y u2 
+        double u1 = 0.1;
+        double u2 = 0.1001;
 
         // Inicializar prev_distance al primer objetivo
         double dx_initial = objetivos[0].x - x;
@@ -58,54 +154,68 @@ void crear_poblacion(poblacion *poblacion, int longitud_genotipo, double delta_t
         for (int j = 1; j < longitud_genotipo; j++)
         {
             runge_kutta(delta_t, &x, &y, &phi_val, &vl, &vr, &u1, &u2, B);
+            
+            poblacion->individuos[i].num_pasos++;
+
             // Normalizar phi_val
             while (phi_val > M_PI) phi_val -= 2 * M_PI;
             while (phi_val < -M_PI) phi_val += 2 * M_PI;
 
+            // Calcular distancia al objetivo actual
             double dx = objetivos[objetivo_actual].x - x;
             double dy = objetivos[objetivo_actual].y - y;
             double distancia_actual = sqrt(dx * dx + dy * dy);
 
-            // Cambiar de objetivo si es necesario
-            if (distancia_actual < distancia_umbral && objetivo_actual < num_objetivos - 1)
+            // Verificar si se alcanzó el objetivo
+            if (distancia_actual < distancia_umbral)
             {
-                objetivo_actual++;
-                integral_error = 0.0;
-                previous_error = 0.0; 
+                if (objetivo_actual < num_objetivos - 1)
+                {
+                    objetivo_actual++;
+                    integral_error = 0.0;
+                    previous_error = 0.0; 
+                }
+                else
+                {
+                    target_reached = 1;  // Marcar que se alcanzó el último objetivo
+                }
             }
 
-            double desired_angle = atan2(objetivos[objetivo_actual].y - y, objetivos[objetivo_actual].x - x);
-            double error_angle = desired_angle - phi_val;
-            // Normalizar error_angle...
-            while (error_angle > M_PI)
-                error_angle -= 2 * M_PI;
-            while (error_angle < -M_PI)
-                error_angle += 2 * M_PI;
+            // Si se alcanzó el objetivo, establecer controles en cero
+            if (target_reached)
+            {
+                u1 = 0.0;
+                u2 = 0.0;
+            }
+            else
+            {
+                // Calcular ajuste del control PID
+                double desired_angle = atan2(objetivos[objetivo_actual].y - y, objetivos[objetivo_actual].x - x);
+                double error_angle = desired_angle - phi_val;
 
-            integral_error += error_angle * delta_t;
-            double derivative_error = (error_angle - previous_error) / delta_t;
-            previous_error = error_angle;
+                // Normalizar error_angle
+                while (error_angle > M_PI) error_angle -= 2 * M_PI;
+                while (error_angle < -M_PI) error_angle += 2 * M_PI;
 
-            double adjustment = kP * error_angle + kI * integral_error + kD * derivative_error;
-            //double adjustment = kP * error_angle;
-            u1 -= adjustment;
-            u2 += adjustment;
+                integral_error += error_angle * delta_t;
+                double derivative_error = (error_angle - previous_error) / delta_t;
+                previous_error = error_angle;
 
-            // Limitar u1 y u2...
-            if (u1 > limite_superior)
-                u1 = limite_superior;
-            if (u1 < limite_inferior)
-                u1 = limite_inferior;
-            if (u2 > limite_superior)
-                u2 = limite_superior;
-            if (u2 < limite_inferior)
-                u2 = limite_inferior;
+                // Aplicar ajuste PID
+                double adjustment = kP * error_angle + kI * integral_error + kD * derivative_error;
+                u1 -= adjustment;
+                u2 += adjustment;
 
-            // Guardar en genotipo
+                // Limitar u1 y u2 dentro de los rangos permitidos
+                u1 = fmax(fmin(u1, limite_superior), limite_inferior);
+                u2 = fmax(fmin(u2, limite_superior), limite_inferior);
+            }
+
+            // Guardar en el genotipo
             poblacion->individuos[i].genotipo_izquierdo[j] = u1;
             poblacion->individuos[i].genotipo_derecho[j] = u2;
 
-            prev_distance = distancia_actual; // Actualizar para la próxima iteración
+            prev_distance = distancia_actual;  // Actualizar para la próxima iteración
         }
     }
 }
@@ -122,45 +232,55 @@ void evaluar_poblacion(poblacion *poblacion, int longitud_genotipo, double delta
     }
 }
 
-// Función para calcular la distancia total recorrida por el individuo (fitness)
+// Función para calcular los pasos totales del robot hasta llegar a su destino (fitness)
 // Recibe un genotipo y la longitud del genotipo
 double evaluar_individuo(double *u1, double *u2, int longitud_genotipo, double delta_t, double B, PuntoObjetivo *objetivos, int num_objetivos, double distancia_umbral)
 {
     double total_cost = 0.0;
     double x = 0.0, y = 0.0, phi = 0.0, vl = 0.0, vr = 0.0;
     int objetivo_actual = 0;
+    int target_reached = 0;  // Bandera para verificar si se alcanzó el último objetivo
 
     for (int i = 0; i < longitud_genotipo; i++)
     {
         double u1_val = u1[i];
         double u2_val = u2[i];
+
+        // Si se alcanzó el último objetivo, establecer controles en cero
+        if (target_reached)
+        {
+            u1_val = 0.0;
+            u2_val = 0.0;
+        }
+
         runge_kutta(delta_t, &x, &y, &phi, &vl, &vr, &u1_val, &u2_val, B);
+
+        total_cost += 1.0;
 
         // Calcular distancia al objetivo actual
         double dx = objetivos[objetivo_actual].x - x;
         double dy = objetivos[objetivo_actual].y - y;
         double distancia = sqrt(dx * dx + dy * dy);
 
-        // Si está cerca, avanzar al siguiente objetivo (si no es el último)
-        if (distancia < distancia_umbral && objetivo_actual < num_objetivos - 1)
+        // Verificar si está cerca del objetivo actual
+        if (distancia < distancia_umbral)
         {
-            objetivo_actual++;
+            if (objetivo_actual < num_objetivos - 1)
+            {
+                objetivo_actual++;
+            }
+            else
+            {
+                // Marcar que se alcanzó el último objetivo
+                target_reached = 1;
+            }
         }
     }
 
-    if (objetivo_actual == num_objetivos - 1)
+    // Aplicar penalización si no se alcanzó el último objetivo
+    if (!target_reached)
     {
-        // El fitness es la distancia al último punto objetivo
-        double dx_final = objetivos[num_objetivos - 1].x - x;
-        double dy_final = objetivos[num_objetivos - 1].y - y;
-        total_cost = sqrt(dx_final * dx_final + dy_final * dy_final);
-    }
-    else{
-        // El fitness es la distancia al último punto objetivo penalizada
-        double dx_final = objetivos[num_objetivos - 1].x - x;
-        double dy_final = objetivos[num_objetivos - 1].y - y;
-        total_cost = sqrt(dx_final * dx_final + dy_final * dy_final);
-        total_cost = total_cost * 10000000;
+        total_cost *= 10000000000;
     }
 
     return total_cost;
@@ -793,4 +913,166 @@ void imprimir_poblacion(poblacion *p, int longitud_genotipo)
         printf("Fitness: %f\n", p->individuos[i].fitness);
         printf("-------------------------------\n");
     }
+}
+
+int main(int argc, char **argv)
+{
+    // Iniciamos la medición del tiempo
+    time_t inicio = time(NULL);
+
+    // Parámetros del algoritmo genético
+    srand(time(NULL));
+    int tamano_poblacion = 500000000000000000;
+    double delta_t = 0.01;
+    double tiempo_test = 8.0;
+    int longitud_genotipo = tiempo_test / delta_t;
+    int num_generaciones = 300;
+    int num_competidores = 50;
+    double limite_inferior = -0.7854;
+    double limite_superior = 0.7854;
+    double probabilidad_mutacion = 0.3;
+    double probabilidad_cruce = 0.9;
+    double B = 0.2;
+    double nc = 10; // SBX (0-20) //Mas alto es mas explotacion
+    double nm = 60; // Polinomial (20-100)
+    double distancia_umbral = 0.1;
+    
+    // Definir puntos objetivo (ejemplo)
+    PuntoObjetivo objetivos[] = {
+         {2.0, 3.0},
+         {5.0, 7.0},
+         {8.0, 10.0}};
+    int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
+    
+   
+   // Definir puntos objetivo (ejemplo)
+    //PuntoObjetivo objetivos[] = {
+    //    {2.0, 3.0}};
+    //int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
+    
+    printf("%d", num_objetivos);
+
+    // Inicializamos la población
+    poblacion *Poblacion = inicializar_poblacion(tamano_poblacion, longitud_genotipo);
+    poblacion *padres = inicializar_poblacion(tamano_poblacion, longitud_genotipo);
+    poblacion *hijos = inicializar_poblacion(tamano_poblacion, longitud_genotipo);
+
+    // Creamos valores aleatorios de genotipo para cada individuo de la población
+    crear_poblacion(Poblacion, longitud_genotipo, delta_t, B, limite_inferior, limite_superior, objetivos, num_objetivos, distancia_umbral);
+    
+    // Imprimir poblacion
+    // imprimir_poblacion(Poblacion, longitud_genotipo);
+
+    // Evaluamos la población
+    evaluar_poblacion(Poblacion, longitud_genotipo, delta_t, B, objetivos, num_objetivos, distancia_umbral);
+
+    // Ordenamos la población
+    ordenar_poblacion(Poblacion);
+
+    // Inicializamos el mejor individuo
+    individuo *Mejor_Individuo = (individuo *)malloc(sizeof(individuo));
+    Mejor_Individuo->genotipo_izquierdo = (double *)malloc(longitud_genotipo * sizeof(double));
+    Mejor_Individuo->genotipo_derecho = (double *)malloc(longitud_genotipo * sizeof(double));
+
+    // Copiamos el mejor individuo de la población a Mejor_Individuo
+    for (int i = 0; i < longitud_genotipo; i++)
+    {
+        Mejor_Individuo->genotipo_izquierdo[i] = Poblacion->individuos[0].genotipo_izquierdo[i];
+        Mejor_Individuo->genotipo_derecho[i] = Poblacion->individuos[0].genotipo_derecho[i];
+    }
+
+    // Copiamos el fitness del mejor individuo
+    Mejor_Individuo->fitness = Poblacion->individuos[0].fitness;
+    /*
+    // Ejecutamos el algoritmo genético
+    for (int generacion = 0; generacion < num_generaciones; generacion++)
+    {
+        // Seleccionamos a los padres
+        seleccionar_padres_torneo(Poblacion, padres, num_competidores, longitud_genotipo);
+
+        // Cruzamos a los padres
+        cruzar_individuos(padres, hijos, tamano_poblacion, longitud_genotipo, probabilidad_cruce, delta_t, B, limite_inferior, limite_superior, nc, objetivos, num_objetivos, distancia_umbral);
+
+        // Mutamos a los hijos
+        for (int i = 0; i < tamano_poblacion; i++)
+        {
+            mutar_individuo(&hijos->individuos[i], probabilidad_mutacion, longitud_genotipo, limite_inferior, limite_superior, nm);
+        }
+
+        // Reemplazamos la población actual con los hijos
+        actualizar_poblacion(&Poblacion, hijos, longitud_genotipo);
+
+        // Evaluamos a los hijos
+        evaluar_poblacion(Poblacion, longitud_genotipo, delta_t, B, objetivos, num_objetivos, distancia_umbral);
+        ordenar_poblacion(Poblacion);
+
+        // Actualizamos al mejor individuo si es necesario
+        if (Poblacion->individuos[0].fitness < Mejor_Individuo->fitness)
+        {
+            for (int i = 0; i < longitud_genotipo; i++)
+            {
+                Mejor_Individuo->genotipo_izquierdo[i] = Poblacion->individuos[0].genotipo_izquierdo[i];
+                Mejor_Individuo->genotipo_derecho[i] = Poblacion->individuos[0].genotipo_derecho[i];
+            }
+            Mejor_Individuo->fitness = Poblacion->individuos[0].fitness;
+        }
+    }
+
+    */
+
+    // Imprimimos al mejor individuo
+    printf("Fitness del mejor individuo: %Lf\n", Mejor_Individuo->fitness);
+
+    // --- Guardar la trayectoria del mejor individuo en un archivo CSV ---
+    FILE *fp = fopen("trayectoria.csv", "w");
+    if (fp == NULL)
+    {
+        printf("Error al abrir el archivo CSV.\n");
+        exit(1);
+    }
+    // Escribir encabezado
+    fprintf(fp, "time,x,y\n");
+
+    // Condiciones iniciales para la simulación de la trayectoria
+    double x_pos = 0.0, y_pos = 0.0, phi_pos = 0.0;
+    double vl = 0.0, vr = 0.0;
+    double t = 0.0;
+    int objetivo_actual = 0;
+    for (int j = 0; j < longitud_genotipo; j++)
+    {
+        double u1 = Mejor_Individuo->genotipo_izquierdo[j];
+        double u2 = Mejor_Individuo->genotipo_derecho[j];
+        runge_kutta(delta_t, &x_pos, &y_pos, &phi_pos, &vl, &vr, &u1, &u2, B);
+        t += delta_t;
+
+        // Verificar si se alcanzó el objetivo actual
+        double dx = objetivos[objetivo_actual].x - x_pos;
+        double dy = objetivos[objetivo_actual].y - y_pos;
+        if (sqrt(dx * dx + dy * dy) < distancia_umbral && objetivo_actual < num_objetivos - 1)
+        {
+            objetivo_actual++;
+        }
+
+        fprintf(fp, "%.4f,%.4f,%.4f\n", t, x_pos, y_pos);
+    }
+    printf("Trayectoria guardada en 'trayectoria.csv'.\n");
+
+    // Liberamos la memoria de todos los elementos
+    liberar_poblacion(Poblacion);
+    liberar_poblacion(padres);
+    liberar_poblacion(hijos);
+    free(Mejor_Individuo->genotipo_izquierdo);
+    Mejor_Individuo->genotipo_izquierdo = NULL;
+    free(Mejor_Individuo->genotipo_derecho);
+    Mejor_Individuo->genotipo_derecho = NULL;
+    free(Mejor_Individuo);
+
+    // Finalizamos la medición del tiempo
+    time_t fin = time(NULL);
+
+    // Imprimimos el tiempo de ejecución
+    double tiempo_ejecucion = difftime(fin, inicio);
+    printf("Tiempo de ejecucion: %.2f segundos\n", tiempo_ejecucion);
+
+    return 0;
 }

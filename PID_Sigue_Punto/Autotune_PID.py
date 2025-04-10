@@ -3,11 +3,6 @@ import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 import csv
 from datetime import datetime
-from multiprocessing import Pool, cpu_count
-import os
-import numpy as np
-from scipy.optimize import differential_evolution
-from functools import partial
 
 # =============================
 # Configuración de parámetros
@@ -30,7 +25,7 @@ max_wheel_velocity = radius * max_rads  # ≈ 0.7854 m/s
 # 3848.246314390027237e+03,-1.296894160712108487e+03
 
 def load_waypoints(csv_filename):
-    # Lee todas las columnas del CSV, omitiendo la cabecera
+    # Usamos numpy para leer el CSV, omitiendo la cabecera
     return np.genfromtxt(csv_filename, delimiter=',', skip_header=1)
 
 # Cargar waypoints
@@ -38,7 +33,6 @@ waypoints = load_waypoints("pista_escalada.csv")
 
 # Actualizar la posición inicial del robot usando la primera coordenada del CSV.
 # En el vector de estado, la posición se representa como [y, x] en las posiciones 3 y 4.
-# Actualizar la posición inicial usando la ruta central (primeras dos columnas)
 x0 = waypoints[0, 0]
 y0 = waypoints[0, 1]
 
@@ -79,6 +73,112 @@ class PIDController:
         self.prev_error = error
         return self.Kp * error + self.Ki * self.integral + self.Kd * derivative
 
+
+# =============================
+# Función de autotuning con evolucion diferencial
+# =============================
+
+def autotune_pid(config, waypoints):
+    def objective(pid_params):
+        Kp, Ki, Kd = pid_params
+        print(f"Probando parámetros: Kp={Kp:.2f}, Ki={Ki:.2f}, Kd={Kd:.2f}")
+        try:
+            Xe, t, _ = lego_robot_simulation(
+                config, waypoints, 
+                pid_params=(Kp, Ki, Kd), 
+                visualize=False
+            )
+            
+            pos_errors = []
+            angle_errors = []
+            current_wp_idx = 0
+            completed = False
+            
+            for i in range(len(t)):
+                if current_wp_idx >= len(waypoints):
+                    completed = True
+                    break
+                
+                pos_x = Xe[i, 4]
+                pos_y = Xe[i, 3]
+                theta = Xe[i, 2]
+                wp = waypoints[current_wp_idx]
+                
+                error_distance = np.sqrt((wp[0]-pos_x)**2 + (wp[1]-pos_y)**2)
+                pos_errors.append(error_distance)
+                
+                if error_distance < dist_threshold:
+                    current_wp_idx += 1
+                    continue
+                
+                desired_angle = np.arctan2(wp[1]-pos_y, wp[0]-pos_x)
+                error_angle = (desired_angle - theta + np.pi) % (2*np.pi) - np.pi
+                angle_errors.append(error_angle**2)
+            
+            total_steps = len(t)
+            completed = completed or (current_wp_idx >= len(waypoints))
+            
+            if not pos_errors:
+                return 1e6  # Penalizar si no se movió
+            
+            # Pesos para cada objetivo (ajustables según prioridades)
+            w_errors = 1.0     # Peso para errores de posición/ángulo
+            w_steps = 0.0005   # Peso para minimizar pasos
+            
+            if not completed:
+                # Penalización por no completar la trayectoria + pasos consumidos
+                metric = 1e6 + total_steps * 0.001
+            else:
+                # Combinación ponderada de métricas
+                mean_pos_error = np.mean(pos_errors)
+                mean_angle_error = np.mean(angle_errors)
+                metric = (w_errors * (mean_pos_error + 0.5 * mean_angle_error) 
+                        + w_steps * total_steps)
+            
+            print(f"Error total: {metric:.2f}")
+            return metric
+ 
+        except Exception as e:
+            print(f"Error en simulación: {str(e)}")
+            return 1e6
+    
+    # Límites realistas para los parámetros
+    bounds = [
+        (0.1, 10.0),   # Kp
+        (0.0, 5.0),    # Ki
+        (0.0, 5.0)     # Kd
+    ]
+    
+    # Optimización con algoritmo evolutivo
+    result = differential_evolution(
+        objective,
+        bounds,
+        strategy='best1bin',
+        maxiter=300,
+        popsize=75,
+        mutation=(0.5, 1.0),
+        recombination=0.9,
+        seed=42,
+        tol=0.01,
+        polish=True
+    )
+    
+    if not result.success:
+        print("No se encontró convergencia durante la optimización. Se utilizarán los parámetros con menor costo encontrados.")
+        # Se intenta la simulación final con los mejores parámetros obtenidos
+        best_params = result.x
+        try:
+            Xe, t, _ = lego_robot_simulation(
+                config, waypoints, 
+                pid_params=tuple(best_params), 
+                visualize=False
+            )
+            print("Simulación completada con los mejores parámetros encontrados.")
+        except Exception as e:
+            print(f"Error al ejecutar la simulación final: {str(e)}")
+        return best_params
+    else:
+        return result.x
 
 # =============================
 # Dinámica del robot (sin cambios)
@@ -193,34 +293,25 @@ def update_plot(ax, Xe_current, waypoint, k_values, dt):
     pos_x = Xe_current[4]
     pos_y = Xe_current[3]
     theta = Xe_current[2]
-    
+
     ax.clear()
-    # Combinar todas las coordenadas X e Y de la ruta central y sus límites para definir los ejes
-    x_all = np.concatenate([waypoints[:,0], waypoints[:,2], waypoints[:,4]])
-    y_all = np.concatenate([waypoints[:,1], waypoints[:,3], waypoints[:,5]])
-    ax.set_xlim(np.min(x_all) - 100, np.max(x_all) + 100)
-    ax.set_ylim(np.min(y_all) - 100, np.max(y_all) + 100)
+    # Ajustar límites para visualizar los waypoints grandes, o bien escalarlos según se requiera.
+    ax.set_xlim(np.min(waypoints[:,0]) - 100, np.max(waypoints[:,0]) + 100)
+    ax.set_ylim(np.min(waypoints[:,1]) - 100, np.max(waypoints[:,1]) + 100)
     ax.grid(True)
     
-    # Dibujar la ruta central
-    ax.plot(waypoints[:,0], waypoints[:,1], 'kx--', label='Ruta central')
-    # Dibujar límite interno (segunda columna de par de coordenadas)
-    ax.plot(waypoints[:,2], waypoints[:,3], 'b--', label='Límite interno')
-    # Dibujar límite externo (tercera columna de par de coordenadas)
-    ax.plot(waypoints[:,4], waypoints[:,5], 'g--', label='Límite externo')
-    
-    # Dibujar el waypoint actual (usando la ruta central)
+    # Dibujar trayectoria planeada
+    ax.plot(waypoints[:,0], waypoints[:,1], 'kx--', label='Ruta planeada')
     ax.plot(waypoint[0], waypoint[1], 'ro', markersize=10, label='Objetivo actual')
-    # Dibujar la posición actual del robot
+    
+    # Dibujar robot
     ax.plot(pos_x, pos_y, 'bo', markersize=8, label='Posición actual')
     
-    # Dibujar flecha de orientación
+    # Dibujar orientación
     arrow_length = 0.5
-    ax.arrow(pos_x, pos_y,
-             arrow_length*np.cos(theta),
-             arrow_length*np.sin(theta),
-             head_width=0.2, head_length=0.3,
-             fc='g', ec='g', label='Orientación')
+    ax.arrow(pos_x, pos_y, 
+             arrow_length*np.cos(theta), arrow_length*np.sin(theta),
+             head_width=0.2, head_length=0.3, fc='g', ec='g', label='Orientación')
     
     ax.legend(loc='upper right')
     plt.draw()
@@ -233,8 +324,7 @@ def main():
     # Los waypoints ya fueron cargados globalmente y la posición inicial actualizada en config.
     print(f"Waypoints cargados: {len(waypoints)} puntos")
     print("Iniciando autotuning PID...")
-    #optimized_pid = autotune_pid(config, waypoints)
-    optimized_pid = 7.1, 3.2, 3.36  # Valores de PID optimizados para la simulación
+    optimized_pid = autotune_pid(config, waypoints)
     print(f"\nParámetros óptimos encontrados:")
     print(f"Kp = {optimized_pid[0]:.2f}")
     print(f"Ki = {optimized_pid[1]:.2f}")
