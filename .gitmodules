@@ -1,0 +1,3 @@
+[submodule "Pistas_Parametrizadas/ext/svgpathtools"]
+	path = Pistas_Parametrizadas/ext/svgpathtools
+	url = https://github.com/mathandy/svgpathtools.git
