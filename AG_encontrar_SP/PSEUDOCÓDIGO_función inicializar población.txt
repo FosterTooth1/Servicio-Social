@@ -1,0 +1,40 @@
+función inicializar población
+
+inicializar_poblacion (mi_path, num_pob, largo_real, ancho_real):
+	
+	puntos[num_pob][2];
+	largo_svg = longitud de la curva mi_path
+	escala = largo_real / largo_svg
+	distancias = generar num_pob valores equidistantes desde 0 hasta largo_svg
+	t_values = obtener valores t para cada distancia usando la inversa de la longitud (ilength) 
+
+	para cada t en t_values hacer
+		punto = coordenada en la curva para t
+		dirección = derivada (vector tangente) en la curva para t
+		dx = parte real de dirección
+		dy = parte imaginaria de dirección
+		magnitud = raíz((dx)^2 + (dy)^2)
+		
+		si magnitud == 0 entonces continuar
+		
+		normal_x = -dy / magnitud
+		normal_y = dx / magnitud
+
+		ai = valor aleatorio entre 1 y (ancho_real - 1) // aquí meter las dimensiones del carrito
+		punto_x_escalado = punto.real * escala_factor
+		punto_y_escalado = punto.imag * escala_factor
+		
+		x_lateral = (punto_x_escalado + normal_x * (-ai/2))  escala
+		y_lateral = (-punto_y_escalado + normal_y * (ai/2))  escala
+
+		agregar (x_lateral, y_lateral) a puntos
+	fin para
+retornar puntos
+
+
+
+
+
+	
+	
+	
