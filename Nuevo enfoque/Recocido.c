@@ -5,250 +5,196 @@
 #include <stdbool.h>
 #include <math.h>
 
-// Estructura de la solucion
+// Definición de la estructura de las coordenadas de los puntos junto con sus límites
+typedef struct {
+    double x;
+    double y;
+    double limite_x_externo;
+    double limite_y_externo;
+    double limite_x_interno;
+    double limite_y_interno;
+} Punto;    
+
+// Estructura del circuito
+typedef struct {
+    Punto *puntos;
+} Circuito;
+
+// Estructura de la solución
 typedef struct
 {
-    int *ruta;      // Ruta de la solucion
-    double fitness; // Fitness de la solucion
+    Circuito ruta;      // Ruta de la actual
+    double fitness; // Fitness de la actual
 } Solucion;
 
-// Estructura para almacenar swaps
-typedef struct
-{
-    int i; // Posición a modificar
-    int j; // Posición objetivo del swap
-} Swap;
 
-// Estructura para ordenar distancias (Almacena la distancia y el índice)(Usado en la heurística de remoción de abruptos)
-typedef struct
-{
-    double distancia;
-    int indice;
-} DistanciaOrdenada;
+void leer_puntos(Circuito *Circuito, char* nombre_archivo, int *num_puntos);
+void imprimir_puntos(Circuito *Circuito, int num_puntos);
+void liberar_puntos(Circuito *Circuito);
+double calcular_angulo_tres_puntos(Punto p1, Punto p2, Punto p3);
+
 
 // Funciones principales del Recocido Simulado
-// Asigna memoria para la solucion
-Solucion *crear_solucion(int tamano, int longitud_permutacion);
-// Crea una permutacion aleatoria para la solucion
-void crear_permutacion(Solucion *solucion, int longitud_permutacion);
-// La heurística se encarga de remover abruptos en la ruta intercamdiando ciudades mal posicionadas
-void heuristica_abruptos(int *ruta, int num_ciudades, int m, double **distancias);
-// Libera la memoria usada para la solucion
-void liberar_solucion(Solucion *solucion);
+// Libera la memoria usada para la actual
+void liberar_solucion(Solucion *actual);
 // Calcula el fitness de la ruta actual
-double calcular_fitness(int *ruta, double **distancias, int num_ciudades);
-// Genera un vecino de la ruta actual (Operación 2-opt)
-void generar_vecino(int *ruta_actual, int *ruta_vecino, int num_ciudades);
+double evaluar_fitness(Circuito *Circuito, int num_puntos);
+// Genera un vecino de la ruta actual
+void rectificar_circuito(Circuito *Circuito, int num_puntos);
 // Calcula la probabilidad de aceptación de un nuevo vecino
 double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, double temperatura);
 
-// Funciones auxiliares de manipulación de arreglos (Usadas en la heurística de remoción de abruptos)
-// Compara dos distancias para ordenarlas
-int comparar_distancias(const void *a, const void *b);
-// Inserta un elemento en una posición específica del arreglo
-void insertar_en_posicion(int *array, int longitud, int elemento, int posicion);
-// Elimina un elemento de una posición específica del arreglo
-void eliminar_de_posicion(int *array, int longitud, int posicion);
-
-
-Solucion *crear_solucion(int tamano, int longitud_permutacion)
-{
-    // Asigna memoria para la solucion
-    Solucion *solucion = malloc(sizeof(Solucion));
-    solucion->ruta = malloc(longitud_permutacion * sizeof(int));
-    solucion->fitness = 0.0;
-    return solucion;
-}
-
-void crear_permutacion(Solucion *solucion, int longitud_permutacion)
-{
-    // Inicializa la ruta con valores ordenados
-    for (int i = 0; i < longitud_permutacion; i++)
-    {
-        solucion->ruta[i] = i;
+void leer_puntos(Circuito *Circuito, char* nombre_archivo, int *num_puntos) {
+    FILE *archivo = fopen(nombre_archivo, "r");
+    if (archivo == NULL) {
+        perror("Error al abrir el archivo");
+        exit(EXIT_FAILURE);
     }
 
-    // Mezcla la ruta utilizando el algoritmo de Fisher-Yates
-    for (int i = longitud_permutacion - 1; i > 0; i--)
-    {
-        int j = rand() % (i + 1);
-        int temp = solucion->ruta[i];
-        solucion->ruta[i] = solucion->ruta[j];
-        solucion->ruta[j] = temp;
+    char encabezado[256];
+    if (fgets(encabezado, sizeof(encabezado), archivo) == NULL) {
+        fclose(archivo);
+        fprintf(stderr, "Error: Archivo vacío o sin encabezado\n");
+        exit(EXIT_FAILURE);
     }
-}
 
-// Heurística para remover abruptos en la ruta intercambiando ciudades mal posicionadas
-// Recibe un puntero a la ruta, el número de ciudades total (longitud del genotipo), el número de ciudades más cercanas a considerar y la matriz de distancias
-// No devuelve nada (todo se hace por referencia)
-void heuristica_abruptos(int *ruta, int num_ciudades, int m, double **distancias)
-{
-    // Inicializamos memoria para un arreglo temporal para la manipulación de rutas
-    int *ruta_temp = malloc(num_ciudades * sizeof(int));
-
-    // Inicializamos meemoria para la estructura que sirve para ordenar distancias
-    DistanciaOrdenada *dist_ordenadas = malloc(num_ciudades * sizeof(DistanciaOrdenada));
-
-    // Para cada ciudad en la ruta
-    for (int i = 0; i < num_ciudades; i++)
-    {
-        int ciudad_actual = ruta[i];
-
-        // Se obtiene y ordenan las m ciudades más cercanas
-        for (int j = 0; j < num_ciudades; j++)
-        {
-            dist_ordenadas[j].distancia = distancias[ciudad_actual][j];
-            dist_ordenadas[j].indice = j;
+    char linea[256];
+    while (fgets(linea, sizeof(linea), archivo)) {
+        Punto *temp = realloc(Circuito->puntos, (*num_puntos + 1) * sizeof(Punto));
+        if (temp == NULL) {
+            perror("Error al asignar memoria");
+            fclose(archivo);
+            free(Circuito->puntos);
+            exit(EXIT_FAILURE);
         }
-        qsort(dist_ordenadas, num_ciudades, sizeof(DistanciaOrdenada), comparar_distancias);
+        Circuito->puntos = temp;
+        
+        int campos_leidos = sscanf(
+            linea, 
+            "%lf,%lf,%lf,%lf,%lf,%lf", 
+            &Circuito->puntos[*num_puntos].x, 
+            &Circuito->puntos[*num_puntos].y,
+            &Circuito->puntos[*num_puntos].limite_x_externo,
+            &Circuito->puntos[*num_puntos].limite_y_externo,
+            &Circuito->puntos[*num_puntos].limite_x_interno,
+            &Circuito->puntos[*num_puntos].limite_y_interno
+        );
+        
+        if (campos_leidos != 6) {
+            fprintf(stderr, "Error en el formato de la línea: %s", linea);
+            fclose(archivo);
+            free(Circuito->puntos);
+            exit(EXIT_FAILURE);
+        }
+        
+        (*num_puntos)++;
+    }
 
-        // Encontramos la posición actual de la ciudad en la ruta
-        int pos_actual = -1;
-        for (int j = 0; j < num_ciudades; j++)
-        {
-            if (ruta[j] == ciudad_actual)
-            {
-                pos_actual = j;
-                break;
+    fclose(archivo);
+}
+
+void imprimir_puntos(Circuito *Circuito, int num_puntos) {
+    for (int i = 0; i < num_puntos; i++) {
+        printf("Punto %d: (%.2f, %.2f)\n", i + 1, Circuito->puntos[i].x, Circuito->puntos[i].y);
+        printf("Limites Externos: (%.2f, %.2f)\n", Circuito->puntos[i].limite_x_externo, Circuito->puntos[i].limite_y_externo);
+        printf("Limites Internos: (%.2f, %.2f)\n", Circuito->puntos[i].limite_x_interno, Circuito->puntos[i].limite_y_interno);
+    }
+}
+
+double calcular_angulo_tres_puntos(Punto p1, Punto p2, Punto p3) {
+    double vec1_x = p2.x - p1.x;
+    double vec1_y = p2.y - p1.y;
+    double vec2_x = p3.x - p2.x;
+    double vec2_y = p3.y - p2.y;
+    
+    double dot = vec1_x * vec2_x + vec1_y * vec2_y;
+    double mag1 = sqrt(vec1_x * vec1_x + vec1_y * vec1_y);
+    double mag2 = sqrt(vec2_x * vec2_x + vec2_y * vec2_y);
+    
+    if (mag1 == 0 || mag2 == 0) return 0.0;
+    
+    double cos_theta = dot / (mag1 * mag2);
+    cos_theta = fmax(fmin(cos_theta, 1.0), -1.0);
+    
+    return acos(cos_theta) * (180.0 / 3.141592);
+}
+
+void rectificar_circuito(Circuito *Circuito, int num_puntos) {
+    if (num_puntos < 3) return;
+
+    const double Pm = 0.1;  // Probabilidad de modificación
+    const int Nm = 100;
+
+    for (int i = 0; i < num_puntos - 2; ++i) {
+        Punto *p1 = &Circuito->puntos[i];
+        Punto *p2 = &Circuito->puntos[i + 1];
+        Punto *p3 = &Circuito->puntos[i + 2];
+        
+        // Ángulo original antes de modificar
+        double angulo_original = calcular_angulo_tres_puntos(*p1, *p2, *p3);
+        double x_original = p2->x;
+        double y_original = p2->y;
+        bool modificado = false;
+
+        // Intentar modificar X (siempre que se cumpla Pm)
+        if ((double)rand() / RAND_MAX <= Pm) {
+            double upper_x = fmax(p2->limite_x_externo, p2->limite_x_interno);
+            double lower_x = fmin(p2->limite_x_externo, p2->limite_x_interno);
+            double delta_x = fmin(upper_x - p2->x, p2->x - lower_x) / (upper_x - lower_x);
+            double r = (double)rand() / RAND_MAX;
+            double deltaq_x;
+
+            if (r <= 0.5) {
+                deltaq_x = pow(2 * r + (1 - 2 * r) * pow(1 - delta_x, Nm + 1), 1.0 / (Nm + 1)) - 1;
+            } else {
+                deltaq_x = 1 - pow(2 * (1 - r) + 2 * (r - 0.5) * pow(1 - delta_x, Nm + 1), 1.0 / (Nm + 1));
+            }
+
+            p2->x += deltaq_x * (upper_x - lower_x);
+            p2->x = fmax(lower_x, fmin(p2->x, upper_x));
+
+            double upper_y = fmax(p2->limite_y_externo, p2->limite_y_interno);
+            double lower_y = fmin(p2->limite_y_externo, p2->limite_y_interno);
+            double delta_y = fmin(upper_y - p2->y, p2->y - lower_y) / (upper_y - lower_y);
+            r = (double)rand() / RAND_MAX;
+            double deltaq_y;
+
+            if (r <= 0.5) {
+                deltaq_y = pow(2 * r + (1 - 2 * r) * pow(1 - delta_y, Nm + 1), 1.0 / (Nm + 1)) - 1;
+            } else {
+                deltaq_y = 1 - pow(2 * (1 - r) + 2 * (r - 0.5) * pow(1 - delta_y, Nm + 1), 1.0 / (Nm + 1));
+            }
+
+            p2->y += deltaq_y * (upper_y - lower_y);
+            p2->y = fmax(lower_y, fmin(p2->y, upper_y));
+            modificado = true;
+        }
+
+        // Verificar si el ángulo empeora después de modificar
+        if (modificado) {
+            double nuevo_angulo = calcular_angulo_tres_puntos(*p1, *p2, *p3);
+            if (nuevo_angulo > angulo_original) {
+                // Revertir cambios si el ángulo aumenta
+                p2->x = x_original;
+                p2->y = y_original;
             }
         }
-
-        // Inicializamos el mejor costo con el costo actual
-        double mejor_costo = calcular_fitness(ruta, distancias, num_ciudades);
-        int mejor_posicion = pos_actual;
-        int mejor_vecino = -1;
-
-        // Probamos la inserción con las m ciudades más cercanas
-        for (int j = 1; j <= m && j < num_ciudades; j++)
-        {
-            int ciudad_cercana = dist_ordenadas[j].indice;
-
-            // Encontramos la posición de la ciudad cercana
-            int pos_cercana = -1;
-            for (int k = 0; k < num_ciudades; k++)
-            {
-                if (ruta[k] == ciudad_cercana)
-                {
-                    pos_cercana = k;
-                    break;
-                }
-            }
-
-            if (pos_cercana != -1)
-            {
-                // Probar inserción antes y después de la ciudad cercana
-                for (int posicion_antes_o_despues = 0; posicion_antes_o_despues <= 1; posicion_antes_o_despues++)
-                {
-                    memcpy(ruta_temp, ruta, num_ciudades * sizeof(int));
-
-                    // Eliminar de posición actual
-                    eliminar_de_posicion(ruta_temp, num_ciudades, pos_actual);
-
-                    // Insertar en nueva posición (antes o después de la ciudad cercana)
-                    int nueva_pos = pos_cercana + posicion_antes_o_despues;
-                    if (nueva_pos > pos_actual)
-                        nueva_pos--;
-                    if (nueva_pos >= num_ciudades)
-                        nueva_pos = num_ciudades - 1;
-                    insertar_en_posicion(ruta_temp, num_ciudades, ciudad_actual, nueva_pos);
-
-                    // Evaluar el nuevo costo
-                    double nuevo_costo = calcular_fitness(ruta_temp, distancias, num_ciudades);
-
-                    // Actualizar el mejor costo y posición de la ciudad actual si es necesario
-                    if (nuevo_costo < mejor_costo)
-                    {
-                        mejor_costo = nuevo_costo;
-                        mejor_posicion = nueva_pos;
-                        mejor_vecino = ciudad_cercana;
-                    }
-                }
-            }
-        }
-
-        // Si se encontró un mejor vecino, actualizar la ruta
-        if (mejor_vecino != -1 && mejor_posicion != pos_actual)
-        {
-            memcpy(ruta_temp, ruta, num_ciudades * sizeof(int));
-            eliminar_de_posicion(ruta_temp, num_ciudades, pos_actual);
-            insertar_en_posicion(ruta_temp, num_ciudades, ciudad_actual, mejor_posicion);
-            memcpy(ruta, ruta_temp, num_ciudades * sizeof(int));
-        }
-    }
-
-    // Liberamos memoria
-    free(ruta_temp);
-    free(dist_ordenadas);
-}
-
-// Funciones auxiliares de manipulación de arreglos (Usadas en la heurística de remoción de abruptos)
-
-// Función de comparación para qsort
-// Recibe dos punteros a distancia ordenada
-// Devuelve un entero que indica la relación entre las distancias
-int comparar_distancias(const void *a, const void *b)
-{
-    DistanciaOrdenada *da = (DistanciaOrdenada *)a;
-    DistanciaOrdenada *db = (DistanciaOrdenada *)b;
-    if (da->distancia < db->distancia)
-        return -1;
-    if (da->distancia > db->distancia)
-        return 1;
-    return 0;
-}
-
-// Función para insertar un elemento en una posición específica del array
-// Recibe un puntero al array, la longitud del array, el elemento a insertar y la posición
-// No devuelve nada (todo se hace por referencia)
-void insertar_en_posicion(int *array, int longitud, int elemento, int posicion)
-{
-    for (int i = longitud - 1; i > posicion; i--)
-    {
-        array[i] = array[i - 1];
-    }
-    array[posicion] = elemento;
-}
-
-// Función para eliminar un elemento de una posición específica
-// Recibe un puntero al array, la longitud del array y la posición
-// No devuelve nada (todo se hace por referencia)
-void eliminar_de_posicion(int *array, int longitud, int posicion)
-{
-    for (int i = posicion; i < longitud - 1; i++)
-    {
-        array[i] = array[i + 1];
     }
 }
 
-double calcular_fitness(int *ruta, double **distancias, int num_ciudades)
-{
-    double total = 0.0;
-    for (int i = 0; i < num_ciudades - 1; i++)
-    {
-        total += distancias[ruta[i]][ruta[i + 1]];
+double evaluar_fitness(Circuito *Circuito, int num_puntos) {
+    if (num_puntos < 3) return 0.0;
+
+    double suma_angulos = 0.0;
+    for (int i = 0; i < num_puntos - 2; ++i) {
+        Punto p1 = Circuito->puntos[i];
+        Punto p2 = Circuito->puntos[i + 1];
+        Punto p3 = Circuito->puntos[i + 2];
+        
+        double angulo = calcular_angulo_tres_puntos(p1, p2, p3);
+        suma_angulos += angulo;
     }
-    // Regresar al punto inicial
-    total += distancias[ruta[num_ciudades - 1]][ruta[0]];
-    return total;
-}
-
-void generar_vecino(int *ruta_actual, int *ruta_vecino, int num_ciudades)
-{
-    memcpy(ruta_vecino, ruta_actual, num_ciudades * sizeof(int));
-
-    // Operación 2-opt (inversión de subruta)
-    int i = rand() % (num_ciudades - 1);
-    int j = rand() % (num_ciudades - i) + i;
-
-    // Invertir el segmento
-    while (i < j)
-    {
-        int temp = ruta_vecino[i];
-        ruta_vecino[i] = ruta_vecino[j];
-        ruta_vecino[j] = temp;
-        i++;
-        j--;
-    }
+    return suma_angulos;
 }
 
 double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, double temperatura)
@@ -258,10 +204,11 @@ double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, dou
     return exp((fitness_actual - fitness_vecino) / temperatura);
 }
 
-void liberar_solucion(Solucion *solucion)
-{
-    free(solucion->ruta);
-    free(solucion);
+void liberar_solucion(Solucion *actual) {
+    if (actual != NULL) {
+        free(actual->ruta.puntos);  // Liberar el array de puntos
+        free(actual);               // Liberar la estructura Solucion
+    }
 }
 
 
@@ -269,83 +216,64 @@ int main()
 {
     // Iniciamos la medición del tiempo
     time_t inicio = time(NULL);
-
     srand(time(NULL));
-    int longitud_ruta = 32;
+
+    // Definición de variables
+    int num_puntos = 0;
     double temperatura_inicial;
     double temperatura_final = 0.000000001;
+    int num_generaciones = 100000;
 
     // Parámetros adaptativos
-    const int max_neighbours = 75; // L(T) = k·N, con k entre 10 y 100; N= 32
-    const int max_successes = (int)(0.5 * max_neighbours);
+    const int max_neighbours = 2000;
+    const int max_successes = (int)(0.1 * max_neighbours);
 
-    int num_generaciones = 1000;
-    int m = 3;
+    // Inicialización de la ruta actual
+    Solucion *actual = (Solucion*)malloc(sizeof(Solucion));
+    actual->ruta.puntos = NULL;
 
     // Nombre del archivo con las distancias
-    char *nombre_archivo = "Distancias_no_head.csv";
+    char *nombre_archivo = "pista_escalada.csv";
 
-    // Reservamos memoria para la matriz que almacena las distancias
-    double **distancias = malloc(longitud_ruta * sizeof(double *));
-    for (int i = 0; i < longitud_ruta; i++)
-    {
-        distancias[i] = malloc(longitud_ruta * sizeof(double));
-    }
+    // Leer los puntos del archivo y guardar en la ruta actual
+    leer_puntos(&actual->ruta, nombre_archivo, &num_puntos);
 
-    // Abrimos el archivo
-    FILE *archivo = fopen(nombre_archivo, "r");
-    if (!archivo)
-    {
-        perror("Error al abrir el archivo");
-        return 1;
-    }
+    // Guardar el fitness de la ruta actual
+    actual->fitness = evaluar_fitness(&actual->ruta, num_puntos);
 
-    // Leemos el archivo y llenamos la matriz
-    char linea[8192];
-    int fila = 0;
-    while (fgets(linea, sizeof(linea), archivo) && fila < longitud_ruta)
-    {
-        char *token = strtok(linea, ",");
-        int columna = 0;
-        while (token && columna < longitud_ruta)
-        {
-            distancias[fila][columna] = atof(token);
-            token = strtok(NULL, ",");
-            columna++;
-        }
-        fila++;
-    }
-    fclose(archivo);
+    // Imprimir los puntos leídos
+    imprimir_puntos(&actual->ruta, num_puntos);
 
-    // Creamos un arreglo con los nombres de las ciudades
-    char nombres_ciudades[32][19] = {
-        "Aguascalientes", "Baja California", "Baja California Sur",
-        "Campeche", "Chiapas", "Chihuahua", "Coahuila", "Colima", "Durango",
-        "Guanajuato", "Guerrero", "Hidalgo", "Jalisco", "Estado de Mexico",
-        "Michoacan", "Morelos", "Nayarit", "Nuevo Leon", "Oaxaca", "Puebla",
-        "Queretaro", "Quintana Roo", "San Luis Potosi", "Sinaloa", "Sonora",
-        "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatan",
-        "Zacatecas", "CDMX"};
+    // Inicialización de la mejor ruta
+    Solucion *mejor = (Solucion*)malloc(sizeof(Solucion));
+    mejor->ruta.puntos = NULL;
 
-    // Inicializamos la solucion
-    Solucion *solucion = crear_solucion(longitud_ruta, longitud_ruta);
-
-    // Creamos una permutacion aleatoria para la solucion
-    crear_permutacion(solucion, longitud_ruta);
-
-    // Aplicamos la heurística de remoción de abruptos
-    heuristica_abruptos(solucion->ruta, longitud_ruta, m, distancias);
-
-    // Inicialización del recocido
-    Solucion *mejor = crear_solucion(longitud_ruta, longitud_ruta);
-    Solucion *actual = crear_solucion(longitud_ruta, longitud_ruta);
-
-    // Usar la solución heurística como inicial
-    memcpy(actual->ruta, solucion->ruta, longitud_ruta * sizeof(int));
-    actual->fitness = calcular_fitness(actual->ruta, distancias, longitud_ruta);
-
-    memcpy(mejor->ruta, actual->ruta, longitud_ruta * sizeof(int));
+    // La mejor ruta es la misma que la actual
+    mejor->ruta.puntos = (Punto*)malloc(num_puntos * sizeof(Punto));
+    memcpy(mejor->ruta.puntos, actual->ruta.puntos, num_puntos * sizeof(Punto));
     mejor->fitness = actual->fitness;
+
+    // Imprimir el fitness inicial
+    printf("Fitness inicial: %.2f grados\n", actual->fitness);
+
+    // Rectificar el circuito inicial
+    rectificar_circuito(&actual->ruta, num_puntos);
+
+    // Imprimir el fitness después de la rectificación
+    actual->fitness = evaluar_fitness(&actual->ruta, num_puntos);
+    printf("Fitness después de rectificar: %.2f grados\n", actual->fitness);
+
+
+
+    // Liberar memoria de la ruta
+    liberar_solucion(actual);
+    
+
+    return 0;
+}
+
+
+/*
 
     int *vecino = malloc(longitud_ruta * sizeof(int));
 
@@ -430,7 +358,7 @@ int main()
     }
     printf("%s\n", nombres_ciudades[mejor->ruta[0]]);
 
-    liberar_solucion(solucion);
+    liberar_solucion(actual);
     liberar_solucion(actual);
     liberar_solucion(mejor);
     for (int i = 0; i < longitud_ruta; i++)
@@ -440,3 +368,5 @@ int main()
     free(distancias);
     return 0;
 }
+
+*/
