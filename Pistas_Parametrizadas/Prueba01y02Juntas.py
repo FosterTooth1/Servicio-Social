@@ -10,10 +10,10 @@ from tkinter.filedialog import askopenfilename
 default_robot_width_m = 0.30
 scale = 1.0
 offset = (default_robot_width_m / 2) * scale
-curvature_threshold    = 0.001    # Umbral curvatura
-window_size           = 15       # Savitzky–Golay
-min_segment_length    = 0.01     # Longitud mínima
-angle_threshold_deg   = 30       # Umbral de ángulo para fusionar
+curvature_threshold    = 0.001
+window_size           = 15
+min_segment_length    = 0.01
+angle_threshold_deg   = 30
 
 COMMANDS = set('MmLlCcZz')
 TOKEN_RE = re.compile(r'[MmLlCcZz]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?')
@@ -92,8 +92,7 @@ def split_bezier(ctrls):
     L1,L2,L3 = (P0+P1)/2,(P1+P2)/2,(P2+P3)/2
     M1,M2    = (L1+L2)/2, (L2+L3)/2
     Mid      = (M1+M2)/2
-    return (np.vstack([P0,L1,M1,Mid]),
-            np.vstack([Mid,M2,L3,P3]))
+    return (np.vstack([P0,L1,M1,Mid]), np.vstack([Mid,M2,L3,P3]))
 
 def angle_between(u, v):
     nu = np.linalg.norm(u)
@@ -105,10 +104,6 @@ def angle_between(u, v):
     return np.degrees(np.arccos(np.clip(np.dot(cu, cv), -1.0, 1.0)))
 
 def compute_offset_curves(pts, offset):
-    """
-    Dado un array Nx2 de puntos (línea central),
-    devuelve dos arrays Nx2: inner y outer, desplazados a cada lado.
-    """
     tangents = np.gradient(pts, axis=0)
     norms = np.linalg.norm(tangents, axis=1, keepdims=True)
     norms[norms == 0] = 1
@@ -119,7 +114,6 @@ def compute_offset_curves(pts, offset):
     return inner, outer
 
 def segment_track(svg_path):
-    # 1) parse+detect
     tree=ET.parse(svg_path); root=tree.getroot()
     ns={'svg':root.tag.split('}')[0].strip('{')}
     raw=[]
@@ -129,11 +123,7 @@ def segment_track(svg_path):
         for typ,idxs in detect_segments(ctr,κ,curvature_threshold):
             raw.append((typ, ctr[idxs]))
         break
-
-    # 2) — DESACTIVAMOS FUSIÓN AUTOMÁTICA —
     merged = raw.copy()
-
-    # 3) asegurar alternancia empezando en curve
     if merged and merged[0][0]=='straight':
         merged = merged[1:]+merged[:1]
     recomb=[]
@@ -143,7 +133,6 @@ def segment_track(svg_path):
         else:
             recomb.append((typ,pts))
 
-    # 4) construir con snap endpoints y split de curvas largas
     segments=[]; last_end=None
     for typ,pts in recomb:
         if typ=='straight':
@@ -168,7 +157,6 @@ def segment_track(svg_path):
             bez[0] = last_end if last_end is not None else bez[0]
             segments.append({'type':'curve','controls':bez.tolist()})
             last_end= bez[-1]
-
     return segments
 
 def load_and_plot(svg_path):
@@ -179,63 +167,55 @@ def load_and_plot(svg_path):
         ('straight','center'): False,
         ('straight','inner'):  False,
         ('straight','outer'):  False,
-        ('curve','center'):    False,
         ('curve','inner'):     False,
         ('curve','outer'):     False,
+        'curve_points':        False
     }
 
     for seg in segs:
         if seg['type']=='straight':
             pts = np.vstack([seg['p0'], seg['p1']])
             inner, outer = compute_offset_curves(pts, offset)
-
-            plt.plot(
-                pts[:,0], pts[:,1], 'b-', lw=2,
-                label='Centro recta'    if not seen[('straight','center')] else '_nolegend_'
-            )
-            plt.plot(
-                inner[:,0], inner[:,1], 'b--', lw=1,
-                label='Cota int. recta' if not seen[('straight','inner')]  else '_nolegend_'
-            )
-            plt.plot(
-                outer[:,0], outer[:,1], 'b--', lw=1,
-                label='Cota ext. recta' if not seen[('straight','outer')]  else '_nolegend_'
-            )
+            plt.plot(pts[:,0], pts[:,1], 'b-', lw=2,
+                     label='Centro recta' if not seen[('straight','center')] else '_nolegend_')
+            plt.plot(inner[:,0], inner[:,1], 'b--', lw=1,
+                     label='Cota int. recta' if not seen[('straight','inner')] else '_nolegend_')
+            plt.plot(outer[:,0], outer[:,1], 'b--', lw=1,
+                     label='Cota ext. recta' if not seen[('straight','outer')] else '_nolegend_')
             seen[('straight','center')] = seen[('straight','inner')] = seen[('straight','outer')] = True
 
         else:
             ctr = np.array(seg['controls'])
-            t = np.linspace(0,1,200)
-            bez = np.array([
-                (1-tt)**3*ctr[0]
-              +3*(1-tt)**2*tt*ctr[1]
-              +3*(1-tt)*tt**2*ctr[2]
-              +   tt**3*ctr[3]
-                for tt in t
+            t_sample = np.linspace(0, 1, 15)
+            sample_pts = np.array([
+                (1-t)**3*ctr[0] + 3*(1-t)**2*t*ctr[1] + 3*(1-t)*t**2*ctr[2] + t**3*ctr[3]
+                for t in t_sample
             ])
-            tang = np.gradient(bez, axis=0)
-            norms = np.linalg.norm(tang,axis=1,keepdims=True)
-            norms[norms==0]=1
+            # Mostrar puntos usados
+            plt.plot(sample_pts[:,0], sample_pts[:,1], 'o', color='green', markersize=4,
+                     label='Puntos curva' if not seen['curve_points'] else '_nolegend_')
+            seen['curve_points'] = True
+
+            bez = fit_cubic_bezier(sample_pts)
+            t_vals = np.linspace(0, 1, 200)
+            curve = np.array([
+                (1-t)**3*bez[0] + 3*(1-t)**2*t*bez[1] + 3*(1-t)*t**2*bez[2] + t**3*bez[3]
+                for t in t_vals
+            ])
+            tang = np.gradient(curve, axis=0)
+            norms = np.linalg.norm(tang, axis=1, keepdims=True)
+            norms[norms==0] = 1
             tang /= norms
             normals = np.column_stack([-tang[:,1], tang[:,0]])
-            inner = bez - normals*offset
-            outer = bez + normals*offset
+            inner = curve - normals*offset
+            outer = curve + normals*offset
+            plt.plot(inner[:,0], inner[:,1], 'r--', lw=1,
+                     label='Cota int. curva' if not seen[('curve','inner')] else '_nolegend_')
+            plt.plot(outer[:,0], outer[:,1], 'r--', lw=1,
+                     label='Cota ext. curva' if not seen[('curve','outer')] else '_nolegend_')
+            seen[('curve','inner')] = seen[('curve','outer')] = True
 
-            plt.plot(
-                bez[:,0], bez[:,1], 'r-', lw=2,
-                label='Centro curva'    if not seen[('curve','center')] else '_nolegend_'
-            )
-            plt.plot(
-                inner[:,0], inner[:,1], 'r--', lw=1,
-                label='Cota int. curva' if not seen[('curve','inner')]  else '_nolegend_'
-            )
-            plt.plot(
-                outer[:,0], outer[:,1], 'r--', lw=1,
-                label='Cota ext. curva' if not seen[('curve','outer')]  else '_nolegend_'
-            )
-            seen[('curve','center')] = seen[('curve','inner')] = seen[('curve','outer')] = True
-
-    plt.title("Pista con cotas interna y externa")
+    plt.title("Pista con cotas y puntos de curvas Bézier")
     plt.xlabel("x"); plt.ylabel("y")
     plt.legend()
     plt.grid(True); plt.axis('equal')
