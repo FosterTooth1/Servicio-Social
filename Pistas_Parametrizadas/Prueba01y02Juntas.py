@@ -1,3 +1,5 @@
+#FUNCIONA POR EL MOMENTO CON LAS PISTAS: AUTODROMO HERMANOS RODRIGUEZ,NURBURING, SUZUKA
+#FALTAN AJUSTAR DETALLES: AUISTIN CIRCUIT
 import xml.etree.ElementTree as ET
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,6 +16,7 @@ curvature_threshold    = 0.001
 window_size           = 15
 min_segment_length    = 0.01
 angle_threshold_deg   = 30
+bezier_to_line_angle  = 10  # grados
 
 COMMANDS = set('MmLlCcZz')
 TOKEN_RE = re.compile(r'[MmLlCcZz]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?')
@@ -135,28 +138,23 @@ def segment_track(svg_path):
 
     segments=[]; last_end=None
     for typ,pts in recomb:
+        if last_end is not None and np.linalg.norm(pts[0] - last_end) > 1e-6:
+            # insertar recta para conectar hueco
+            segments.append({'type':'straight','p0':last_end.tolist(),'p1':pts[0].tolist()})
         if typ=='straight':
-            A = last_end if last_end is not None else pts[0]
-            B = pts[-1]
-            segments.append({'type':'straight','p0':A.tolist(),'p1':B.tolist()})
-            last_end = B
+            segments.append({'type':'straight','p0':pts[0].tolist(),'p1':pts[-1].tolist()})
+            last_end = pts[-1]
         else:
             bez = fit_cubic_bezier(pts)
-            prev = segments[-1] if segments else None
-            if prev and prev['type']=='straight':
-                Ls = np.linalg.norm(np.array(prev['p1'])-np.array(prev['p0']))
-                Lc = length_of(pts)
-                if Lc>Ls:
-                    b1,b2 = split_bezier(bez)
-                    b1[0]= last_end; b2[0]= b1[-1]
-                    segments += [
-                        {'type':'curve','controls':b1.tolist()},
-                        {'type':'curve','controls':b2.tolist()}
-                    ]
-                    last_end = b2[-1]; continue
-            bez[0] = last_end if last_end is not None else bez[0]
+            v1 = bez[1] - bez[0]
+            v2 = bez[-1] - bez[-2]
+            angle = angle_between(v1, v2)
+            if angle < bezier_to_line_angle:
+                segments.append({'type':'straight','p0':bez[0].tolist(),'p1':bez[-1].tolist()})
+                last_end = bez[-1]
+                continue
             segments.append({'type':'curve','controls':bez.tolist()})
-            last_end= bez[-1]
+            last_end = bez[-1]
     return segments
 
 def load_and_plot(svg_path):
@@ -186,20 +184,9 @@ def load_and_plot(svg_path):
 
         else:
             ctr = np.array(seg['controls'])
-            t_sample = np.linspace(0, 1, 15)
-            sample_pts = np.array([
-                (1-t)**3*ctr[0] + 3*(1-t)**2*t*ctr[1] + 3*(1-t)*t**2*ctr[2] + t**3*ctr[3]
-                for t in t_sample
-            ])
-            # Mostrar puntos usados
-            plt.plot(sample_pts[:,0], sample_pts[:,1], 'o', color='green', markersize=4,
-                     label='Puntos curva' if not seen['curve_points'] else '_nolegend_')
-            seen['curve_points'] = True
-
-            bez = fit_cubic_bezier(sample_pts)
             t_vals = np.linspace(0, 1, 200)
             curve = np.array([
-                (1-t)**3*bez[0] + 3*(1-t)**2*t*bez[1] + 3*(1-t)*t**2*bez[2] + t**3*bez[3]
+                (1-t)**3*ctr[0] + 3*(1-t)**2*t*ctr[1] + 3*(1-t)*t**2*ctr[2] + t**3*ctr[3]
                 for t in t_vals
             ])
             tang = np.gradient(curve, axis=0)
@@ -209,13 +196,18 @@ def load_and_plot(svg_path):
             normals = np.column_stack([-tang[:,1], tang[:,0]])
             inner = curve - normals*offset
             outer = curve + normals*offset
+            idxs = np.linspace(0, len(curve)-1, 15).astype(int)
+            sample_pts = curve[idxs]
+            plt.plot(sample_pts[:,0], sample_pts[:,1], 'o', color='purple', markersize=4,
+                     label='Puntos curva' if not seen['curve_points'] else '_nolegend_')
+            seen['curve_points'] = True
             plt.plot(inner[:,0], inner[:,1], 'r--', lw=1,
                      label='Cota int. curva' if not seen[('curve','inner')] else '_nolegend_')
             plt.plot(outer[:,0], outer[:,1], 'r--', lw=1,
                      label='Cota ext. curva' if not seen[('curve','outer')] else '_nolegend_')
             seen[('curve','inner')] = seen[('curve','outer')] = True
 
-    plt.title("Pista con cotas y puntos de curvas Bézier")
+    plt.title("Pista con cotas, puntos Bézier y segmentos conectados")
     plt.xlabel("x"); plt.ylabel("y")
     plt.legend()
     plt.grid(True); plt.axis('equal')
