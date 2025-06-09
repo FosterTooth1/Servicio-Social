@@ -44,6 +44,85 @@ void rectificar_circuito(Circuito *Circuito, int num_puntos);
 // Calcula la probabilidad de aceptación de un nuevo vecino
 double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, double temperatura);
 
+// Guarda la solución en un CSV con columnas:
+// x_central,y_central,x_border1,y_border1,x_border2,y_border2
+// Se asume: border1 = (limite_x_externo, limite_y_externo)
+//           border2 = (limite_x_interno, limite_y_interno)
+void guardar_solucion_csv(const char *nombre_archivo, Solucion *sol, int num_puntos) {
+    if (sol == NULL || sol->ruta.puntos == NULL) {
+        fprintf(stderr, "guardar_solucion_csv: solución o puntos NULL\n");
+        return;
+    }
+    FILE *f = fopen(nombre_archivo, "w");
+    if (!f) {
+        perror("Error al abrir archivo para guardar solución");
+        return;
+    }
+    // Cabecera
+    fprintf(f, "x_central,y_central,x_border1,y_border1,x_border2,y_border2\n");
+    for (int i = 0; i < num_puntos; ++i) {
+        Punto *p = &sol->ruta.puntos[i];
+        // central
+        double xc = p->x;
+        double yc = p->y;
+        // borde1 (externo)
+        double xb1 = p->limite_x_externo;
+        double yb1 = p->limite_y_externo;
+        // borde2 (interno)
+        double xb2 = p->limite_x_interno;
+        double yb2 = p->limite_y_interno;
+        fprintf(f,
+                "%.18e,%.18e,%.18e,%.18e,%.18e,%.18e\n",
+                xc, yc,
+                xb1, yb1,
+                xb2, yb2);
+    }
+    fclose(f);
+}
+
+
+// Función auxiliar: double uniforme en [0,1)
+static double rand_double_0_1() {
+    return (double)rand() / ((double)RAND_MAX + 1.0);
+}
+
+// Crear individuo: para cada punto del circuito, asigna x,y
+// entre la línea interna y externa de la pista en esa sección
+void crear_individuo(Circuito *circuito, int num_puntos) {
+    if (circuito == NULL || circuito->puntos == NULL) {
+        fprintf(stderr, "crear_individuo: circuito o puntos NULL\n");
+        return;
+    }
+
+    for (int i = 0; i < num_puntos; i++) {
+        Punto *p = &circuito->puntos[i];
+
+        // Si los límites vienen invertidos (interno/exterior intercambiados), los corregimos:
+        double xi = p->limite_x_interno;
+        double yi = p->limite_y_interno;
+        double xe = p->limite_x_externo;
+        double ye = p->limite_y_externo;
+
+        // Opcional: si se detecta que la distancia interna->exterior es cero o muy pequeña,
+        // podrías saltar o dejar el punto central:
+        double dx = xe - xi;
+        double dy = ye - yi;
+        double dist2 = dx*dx + dy*dy;
+        if (dist2 < 1e-12) {
+            // Bordes casi coincidentes: dejamos el punto central tal cual o igualamos a xi,yi.
+            // Por ahora, asignamos a xi,yi:
+            p->x = xi;
+            p->y = yi;
+            continue;
+        }
+
+        // Muestreamos t en [0,1) para interpolar a lo largo de la sección transversal:
+        double t = rand_double_0_1();
+        p->x = xi + t * dx;
+        p->y = yi + t * dy;
+    }
+}
+
 void leer_puntos(Circuito *Circuito, char* nombre_archivo, int *num_puntos) {
     FILE *archivo = fopen(nombre_archivo, "r");
     if (archivo == NULL) {
@@ -122,7 +201,7 @@ double calcular_angulo_tres_puntos(Punto p1, Punto p2, Punto p3) {
 void rectificar_circuito(Circuito *Circuito, int num_puntos) {
     if (num_puntos < 3) return;
 
-    const double Pm = 0.1;  // Probabilidad de modificación
+    const double Pm = 0.01;  // Probabilidad de modificación
     const int Nm = 100;
 
     for (int i = 0; i < num_puntos - 2; ++i) {
@@ -221,7 +300,7 @@ int main()
     // Definición de variables
     int num_puntos = 0;
     double temperatura_inicial;
-    double temperatura_final = 0.000000001;
+    double temperatura_final = 0.001;
     int num_generaciones = 100000;
 
     // Parámetros adaptativos
@@ -237,6 +316,8 @@ int main()
 
     // Leer los puntos del archivo y guardar en la ruta actual
     leer_puntos(&actual->ruta, nombre_archivo, &num_puntos);
+
+    crear_individuo(&actual->ruta, num_puntos);
 
     // Guardar el fitness de la ruta actual
     actual->fitness = evaluar_fitness(&actual->ruta, num_puntos);
@@ -263,44 +344,33 @@ int main()
     actual->fitness = evaluar_fitness(&actual->ruta, num_puntos);
     printf("Fitness después de rectificar: %.2f grados\n", actual->fitness);
 
-
-
-    // Liberar memoria de la ruta
-    liberar_solucion(actual);
-    
-
-    return 0;
-}
-
-
-/*
-
-    int *vecino = malloc(longitud_ruta * sizeof(int));
-
+    // Calcular la temperatura inicial
     double suma = 0, suma_cuadrados = 0;
     for (int i = 0; i < 100; i++)
     {
-        generar_vecino(actual->ruta, vecino, longitud_ruta);
-        // Aplicar la heurística de remoción de abruptos al vecino
-        heuristica_abruptos(vecino, longitud_ruta, m, distancias);
-        double fit = calcular_fitness(vecino, distancias, longitud_ruta);
-        suma += fit;
-        suma_cuadrados += fit * fit;
+        // Generar un vecino de la ruta actual
+        Circuito vecino = actual->ruta;
+        rectificar_circuito(&vecino, num_puntos);
+        
+        // Calcular el fitness del vecino
+        double fit_vecino = evaluar_fitness(&vecino, num_puntos);
+        suma += fit_vecino;
+        suma_cuadrados += fit_vecino * fit_vecino;
     }
+
     double desviacion = sqrt((suma_cuadrados - suma * suma / 100) / 99);
-    temperatura_inicial = desviacion; // Ajuste empírico
+    temperatura_inicial = desviacion;
 
-    // Calculo de la temperatura inicial
-    // Usando un porcentaje de la mejor solución
-    // temperatura_inicial = mejor->fitness * 0.3;
-
+    // Imprimir la temperatura inicial
+    printf("Temperatura inicial: %.6f\n", temperatura_inicial);
     double temperatura = temperatura_inicial;
-
-    // Ciclo principal de recocido con enfriamiento logarítmico (Béltsman)
+    // Ciclo principal de recocido simulado
     for (int iter = 1; iter <= num_generaciones && temperatura > temperatura_final; iter++)
+    //int iter=0;
+    //while (temperatura > temperatura_final)
     {
-        // Enfriamiento logarítmico de Béltsman:
-        // T_k = T0 / ln(k + 1)
+        iter++;
+        // Enfriamiento logarítmico de Béltsman
         temperatura = temperatura_inicial / log(iter + 1.0);
 
         int neighbours = 0;
@@ -309,20 +379,24 @@ int main()
         // Fase de equilibrio: hasta max_neighbours o max_successes
         while (neighbours < max_neighbours && successes < max_successes)
         {
-            generar_vecino(actual->ruta, vecino, longitud_ruta);
-            double fit_vecino = calcular_fitness(vecino, distancias, longitud_ruta);
+            // Generar un vecino de la ruta actual
+            Circuito vecino = actual->ruta;
+            rectificar_circuito(&vecino, num_puntos);
+            
+            // Calcular el fitness del vecino
+            double fit_vecino = evaluar_fitness(&vecino, num_puntos);
 
             if (probabilidad_aceptacion(actual->fitness, fit_vecino, temperatura) > ((double)rand() / RAND_MAX))
             {
                 // Aceptamos el vecino
-                memcpy(actual->ruta, vecino, longitud_ruta * sizeof(int));
+                memcpy(actual->ruta.puntos, vecino.puntos, num_puntos * sizeof(Punto));
                 actual->fitness = fit_vecino;
                 successes++;
 
                 // Actualizamos el mejor si procede
                 if (actual->fitness < mejor->fitness)
                 {
-                    memcpy(mejor->ruta, actual->ruta, longitud_ruta * sizeof(int));
+                    memcpy(mejor->ruta.puntos, actual->ruta.puntos, num_puntos * sizeof(Punto));
                     mejor->fitness = actual->fitness;
                 }
             }
@@ -330,43 +404,18 @@ int main()
             neighbours++;
         }
 
-        // Aplicar heurística de remoción de abruptos tras cada enfriamiento
-        heuristica_abruptos(actual->ruta,
-                            longitud_ruta,
-                            m,
-                            distancias);
-        actual->fitness = calcular_fitness(actual->ruta,
-                                           distancias,
-                                           longitud_ruta);
-
-        // (Opcional) Mostrar info de cada paso de enfriamiento
-        printf("Iter %3d | Temp = %.6f | Neighbors = %3d | Successes = %2d | Mejor = %.2f\n",
+        // Imprimir información de cada paso de enfriamiento
+        printf("Iter %3d | Temp = %.6f | Neighbors = %3d | Successes = %2d | Mejor = %.2f grados\n",
                iter, temperatura, neighbours, successes, mejor->fitness);
     }
 
-    // Mostrar tiempo de ejecución
-    time_t fin = time(NULL);
-    double tiempo_ejecucion = difftime(fin, inicio);
-    printf("Tiempo de ejecución: %.2f segundos\n", tiempo_ejecucion);
 
-    // Liberar memoria y mostrar resultados
-    free(vecino);
-    printf("\nMejor ruta encontrada (%.2f km):\n", mejor->fitness);
-    for (int i = 0; i < longitud_ruta; i++)
-    {
-        printf("%s -> ", nombres_ciudades[mejor->ruta[i]]);
-    }
-    printf("%s\n", nombres_ciudades[mejor->ruta[0]]);
 
+    // Liberar memoria de la ruta
     liberar_solucion(actual);
-    liberar_solucion(actual);
-    liberar_solucion(mejor);
-    for (int i = 0; i < longitud_ruta; i++)
-    {
-        free(distancias[i]);
-    }
-    free(distancias);
+
+    guardar_solucion_csv("solucion.csv", mejor, num_puntos);
+
+
     return 0;
 }
-
-*/
