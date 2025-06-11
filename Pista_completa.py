@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d  # Importar interp1d para interpolación
 
 # Parámetros
 ancho_extra = 1        # Ancho total de la pista
-num_points = 200       # Número de puntos para la línea central
+num_points = 600       # Número de puntos para la línea central
 desired_length = 400    # Longitud deseada para la pista
 
 # Cargar el archivo SVG

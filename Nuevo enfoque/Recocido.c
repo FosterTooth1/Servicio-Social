@@ -300,11 +300,12 @@ int main()
     // Definición de variables
     int num_puntos = 0;
     double temperatura_inicial;
+    //double temperatura_final = 0.000001;
     double temperatura_final = 0.001;
-    int num_generaciones = 100000;
+    int num_generaciones = 100000000;
 
     // Parámetros adaptativos
-    const int max_neighbours = 2000;
+    const int max_neighbours = 6000;
     const int max_successes = (int)(0.1 * max_neighbours);
 
     // Inicialización de la ruta actual
@@ -369,9 +370,10 @@ int main()
     //int iter=0;
     //while (temperatura > temperatura_final)
     {
-        iter++;
+        //iter++;
         // Enfriamiento logarítmico de Béltsman
         temperatura = temperatura_inicial / log(iter + 1.0);
+        //temperatura = temperatura * 0.999;
 
         int neighbours = 0;
         int successes = 0;
@@ -405,7 +407,7 @@ int main()
         }
 
         // Imprimir información de cada paso de enfriamiento
-        printf("Iter %3d | Temp = %.6f | Neighbors = %3d | Successes = %2d | Mejor = %.2f grados\n",
+        printf("Iter %d | Temp = %.6f | Neighbors = %d | Successes = %d | Mejor = %.2f grados\n",
                iter, temperatura, neighbours, successes, mejor->fitness);
     }
 
