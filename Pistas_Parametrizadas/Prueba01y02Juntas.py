@@ -1,5 +1,6 @@
 #FUNCIONA POR EL MOMENTO CON LAS PISTAS: AUTODROMO HERMANOS RODRIGUEZ,NURBURING, SUZUKA
 #FALTAN AJUSTAR DETALLES: AUISTIN CIRCUIT
+#Borde 1 externo y 2 interno
 import xml.etree.ElementTree as ET
 import numpy as np
 import matplotlib.pyplot as plt
