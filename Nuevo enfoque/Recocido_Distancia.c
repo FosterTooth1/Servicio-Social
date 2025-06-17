@@ -31,7 +31,7 @@ typedef struct
 void leer_puntos(Circuito *Circuito, char* nombre_archivo, int *num_puntos);
 void imprimir_puntos(Circuito *Circuito, int num_puntos);
 void liberar_puntos(Circuito *Circuito);
-double calcular_angulo_tres_puntos(Punto p1, Punto p2, Punto p3);
+double calcular_distancia_dos_puntos(Punto p1, Punto p2);
 
 
 // Funciones principales del Recocido Simulado
@@ -180,26 +180,14 @@ void imprimir_puntos(Circuito *Circuito, int num_puntos) {
     }
 }
 
-double calcular_angulo_tres_puntos(Punto p1, Punto p2, Punto p3) {
-    double vec1_x = p2.x - p1.x;
-    double vec1_y = p2.y - p1.y;
-    double vec2_x = p3.x - p2.x;
-    double vec2_y = p3.y - p2.y;
-    
-    double dot = vec1_x * vec2_x + vec1_y * vec2_y;
-    double mag1 = sqrt(vec1_x * vec1_x + vec1_y * vec1_y);
-    double mag2 = sqrt(vec2_x * vec2_x + vec2_y * vec2_y);
-    
-    if (mag1 == 0 || mag2 == 0) return 0.0;
-    
-    double cos_theta = dot / (mag1 * mag2);
-    cos_theta = fmax(fmin(cos_theta, 1.0), -1.0);
-    
-    return acos(cos_theta) * (180.0 / 3.141592);
+double calcular_distancia_dos_puntos(Punto p1, Punto p2) {
+    double dx = p2.x - p1.x;
+    double dy = p2.y - p1.y;
+    return sqrt(dx * dx + dy * dy);
 }
 
 void rectificar_circuito(Circuito *Circuito, int num_puntos) {
-    if (num_puntos < 3) return;
+    if (num_puntos < 2) return;
 
     const double Pm = 0.01;  // Probabilidad de modificación
     const int Nm = 100;
@@ -207,10 +195,9 @@ void rectificar_circuito(Circuito *Circuito, int num_puntos) {
     for (int i = 0; i < num_puntos - 2; ++i) {
         Punto *p1 = &Circuito->puntos[i];
         Punto *p2 = &Circuito->puntos[i + 1];
-        Punto *p3 = &Circuito->puntos[i + 2];
         
         // Ángulo original antes de modificar
-        double angulo_original = calcular_angulo_tres_puntos(*p1, *p2, *p3);
+        double distancia_original = calcular_distancia_dos_puntos(*p1, *p2);
         double x_original = p2->x;
         double y_original = p2->y;
         bool modificado = false;
@@ -251,9 +238,9 @@ void rectificar_circuito(Circuito *Circuito, int num_puntos) {
 
         // Verificar si el ángulo empeora después de modificar
         if (modificado) {
-            double nuevo_angulo = calcular_angulo_tres_puntos(*p1, *p2, *p3);
-            if (nuevo_angulo > angulo_original) {
-                // Revertir cambios si el ángulo aumenta
+            double nueva_distancia = calcular_distancia_dos_puntos(*p1, *p2);
+            if (nueva_distancia > distancia_original) {
+                // Revertir cambios si la distancia aumenta
                 p2->x = x_original;
                 p2->y = y_original;
             }
@@ -262,18 +249,17 @@ void rectificar_circuito(Circuito *Circuito, int num_puntos) {
 }
 
 double evaluar_fitness(Circuito *Circuito, int num_puntos) {
-    if (num_puntos < 3) return 0.0;
+    if (num_puntos < 2) return 0.0;
 
-    double suma_angulos = 0.0;
-    for (int i = 0; i < num_puntos - 2; ++i) {
+    double suma_puntos = 0.0;
+    for (int i = 0; i < num_puntos - 1; ++i) {
         Punto p1 = Circuito->puntos[i];
         Punto p2 = Circuito->puntos[i + 1];
-        Punto p3 = Circuito->puntos[i + 2];
         
-        double angulo = calcular_angulo_tres_puntos(p1, p2, p3);
-        suma_angulos += angulo;
+        double distancia = calcular_distancia_dos_puntos(p1, p2);
+        suma_puntos += distancia;
     }
-    return suma_angulos;
+    return suma_puntos;
 }
 
 double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, double temperatura)
@@ -302,7 +288,7 @@ int main()
     double temperatura_inicial;
     double temperatura_final = 0.000001;
     //double temperatura_final = 0.001;
-    int num_generaciones = 100000000;
+    int num_generaciones = 100000;
 
     // Parámetros adaptativos
     const int max_neighbours = 6000;
@@ -361,6 +347,7 @@ int main()
 
     double desviacion = sqrt((suma_cuadrados - suma * suma / 100) / 99);
     temperatura_inicial = desviacion;
+    //temperatura_inicial = 100;
 
     // Imprimir la temperatura inicial
     printf("Temperatura inicial: %.6f\n", temperatura_inicial);
@@ -407,7 +394,7 @@ int main()
         }
 
         // Imprimir información de cada paso de enfriamiento
-        printf("Iter %d | Temp = %.6f | Neighbors = %d | Successes = %d | Mejor = %.2f grados\n",
+        printf("Iter %d | Temp = %.6f | Neighbors = %d | Successes = %d | Mejor = %.2f metros\n",
                iter, temperatura, neighbours, successes, mejor->fitness);
     }
 
@@ -416,7 +403,7 @@ int main()
     // Liberar memoria de la ruta
     liberar_solucion(actual);
 
-    guardar_solucion_csv("solucion.csv", mejor, num_puntos);
+    guardar_solucion_csv("solucion_distancia.csv", mejor, num_puntos);
 
 
     return 0;
