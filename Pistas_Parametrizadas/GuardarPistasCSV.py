@@ -17,7 +17,7 @@ curvature_threshold   = 0.001
 window_size           = 15
 
 # ——— Parámetros de reescalado ———
-desired_length = 400    # longitud deseada de la pista (en unidades SVG transformadas a m)
+desired_length = 400    # longitud deseada de la pista
 num_points     = 600    # número de puntos en la línea central tras remuestreo
 
 COMMANDS = set('MmLlCcZz')
@@ -59,7 +59,7 @@ def parse_path_d(d):
     return np.vstack(pts)
 
 def rescale_and_sample(svg_path):
-    # 1) Extraer todos los pts de ALL <path> en el SVG
+    # 1) Extraer todos los puntos de todos los <path> en el SVG
     tree = ET.parse(svg_path)
     root = tree.getroot()
     ns   = {'svg': root.tag.split('}')[0].strip('{')}
@@ -73,22 +73,21 @@ def rescale_and_sample(svg_path):
     # 2) Calcular longitud total
     dx = np.diff(all_pts[:,0])
     dy = np.diff(all_pts[:,1])
-    dists = np.sqrt(dx*dx + dy*dy)
-    total_length = dists.sum()
+    total_length = np.sqrt(dx*dx + dy*dy).sum()
 
-    # 3) Factor de escala
-    scale_factor = desired_length / total_length
-    xs = all_pts[:,0] * scale_factor
-    ys = all_pts[:,1] * scale_factor
+    # 3) Escala uniforme
+    factor = desired_length / total_length
+    xs = all_pts[:,0] * factor
+    ys = all_pts[:,1] * factor
 
-    # 4) Parametrizar por longitud de arco
+    # 4) Parametrización por longitud de arco
     ds = np.concatenate([[0], np.cumsum(np.sqrt(np.diff(xs)**2 + np.diff(ys)**2))])
     fx = interp1d(ds, xs, kind='linear')
     fy = interp1d(ds, ys, kind='linear')
     s_new = np.linspace(0, ds[-1], num_points)
     xc, yc = fx(s_new), fy(s_new)
 
-    # 5) Calcular normales
+    # 5) Cálculo de normales
     dxn = np.gradient(xc)
     dyn = np.gradient(yc)
     mag = np.sqrt(dxn*dxn + dyn*dyn)
@@ -97,18 +96,17 @@ def rescale_and_sample(svg_path):
 
     return xc, yc, nx, ny
 
-def export(svg_path):
-    # preparar carpetas
-    os.makedirs('output_svg', exist_ok=True)
+def export_csv(svg_path):
+    # carpeta solo CSV
     os.makedirs('output_csv', exist_ok=True)
 
     # remuestrear y escalar
     xc, yc, nx, ny = rescale_and_sample(svg_path)
     # Borde1 externo, Borde2 interno
-    b1x, b1y = xc + (offset*2)*nx, yc + (offset*2)*ny
-    b2x, b2y = xc - (offset*2)*nx, yc - (offset*2)*ny
+    b1x, b1y = xc + offset*nx, yc + offset*ny
+    b2x, b2y = xc - offset*nx, yc - offset*ny
 
-    # --- CSV ---
+    # Guardar CSV
     csvf = os.path.join('output_csv',
         os.path.splitext(os.path.basename(svg_path))[0] + '.csv')
     with open(csvf, 'w', newline='') as f:
@@ -120,37 +118,20 @@ def export(svg_path):
                         f'{x2:.18e}', f'{y2:.18e}'])
     print("CSV guardado en:", csvf)
 
-    # --- SVG paramétrico ---
-    root = ET.Element('svg', xmlns="http://www.w3.org/2000/svg")
-    def mkpath(xs, ys, color, dash=''):
-        d = 'M ' + ' L '.join(f'{x:.3f},{y:.3f}' for x,y in zip(xs,ys))
-        attrib = {'d':d, 'stroke':color, 'fill':'none'}
-        if dash: attrib['stroke-dasharray'] = dash
-        return ET.Element('path', attrib)
-    root.append(mkpath(xc, yc, '#000000'))
-    root.append(mkpath(b1x,b1y,'#ff0000','5,5'))
-    root.append(mkpath(b2x,b2y,'#0000ff','5,5'))
-    tree = ET.ElementTree(root)
-    svgf = os.path.join('output_svg',
-        os.path.splitext(os.path.basename(svg_path))[0] + '_param.svg')
-    tree.write(svgf)
-    print("SVG guardado en:", svgf)
-
-    # --- Mostrar figura escalada pequeña ---
+    # Opcional: mostrar gráfica
     plt.figure(figsize=(6,6))
     plt.plot(xc, yc, 'k-', linewidth=2, label='Centro remuestreado')
     plt.plot(b1x,b1y,'r--',linewidth=1,label='Borde externo')
     plt.plot(b2x,b2y,'b--',linewidth=1,label='Borde interno')
     plt.title("Pista remuestreada y escalada")
     plt.xlabel("X"); plt.ylabel("Y")
-    plt.axis('equal')
-    plt.legend(); plt.grid(True)
+    plt.axis('equal'); plt.legend(); plt.grid(True)
     plt.show()
 
 if __name__=='__main__':
     root = Tk(); root.withdraw()
     fn = askopenfilename(title="Selecciona SVG", filetypes=[("SVG","*.svg")])
     if fn:
-        export(fn)
+        export_csv(fn)
     else:
         print("No se seleccionó archivo.")
