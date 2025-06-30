@@ -14,12 +14,12 @@ default_robot_width_m = 0.30
 scale = 1.0
 offset = (default_robot_width_m / 2) * scale
 curvature_threshold = 0.001
-window_size = 15
+window_size = 15 # Must be odd
 epsilon = 1e-5  # Tolerancia para coincidencia de puntos
 
 # ——— Parámetros de reescalado ———
 desired_length = 400  # longitud deseada de la pista
-num_points = 600  # número de puntos en la línea central tras remuestreo
+num_points = 600  # número total deseado de puntos en la línea central tras remuestreo
 
 COMMANDS = set('MmLlCcZz')
 TOKEN_RE = re.compile(r'[MmLlCcZz]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?')
@@ -28,7 +28,7 @@ def parse_path_d(d):
     tokens, i = TOKEN_RE.findall(d), 0
     cur = np.zeros(2)
     start = cur.copy()
-    pts = []
+    pts = [] # List to collect individual points as NumPy arrays
     while i < len(tokens):
         cmd = tokens[i]
         if cmd in ('M', 'm'):
@@ -53,179 +53,202 @@ def parse_path_d(d):
             while i + 5 < len(tokens) and tokens[i] not in COMMANDS:
                 c = list(map(float, tokens[i:i + 6]))
                 i += 6
-                p1 = cur + c[0:2] if is_rel else np.array(c[0:2])
-                p2 = cur + c[2:4] if is_rel else np.array(c[2:4])
-                p3 = cur + c[4:6] if is_rel else np.array(c[4:6])
-                for t in np.linspace(0, 1, 20):
-                    pts.append(((1 - t) ** 3) * cur
-                               + 3 * ((1 - t) ** 2) * t * p1
-                               + 3 * (1 - t) * (t ** 2) * p2
-                               + (t ** 3) * p3)
-                cur = p3.copy()
+                p1_ctrl = cur + c[0:2] if is_rel else np.array(c[0:2])
+                p2_ctrl = cur + c[2:4] if is_rel else np.array(c[2:4])
+                p3_end = cur + c[4:6] if is_rel else np.array(c[4:6])
+                
+                # Dynamic number of Bezier points based on segment length, or minimum
+                # This initial parsing is still quite dense to preserve detail for curvature
+                approx_length = np.linalg.norm(p1_ctrl - cur) + np.linalg.norm(p2_ctrl - p1_ctrl) + np.linalg.norm(p3_end - p2_ctrl)
+                num_bezier_points = max(5, int(approx_length / 2)) # Adjust divisor for point density
+                
+                for t in np.linspace(0, 1, num_bezier_points):
+                    point = (1 - t)**3 * cur + \
+                            3 * (1 - t)**2 * t * p1_ctrl + \
+                            3 * (1 - t) * t**2 * p2_ctrl + \
+                            t**3 * p3_end
+                    pts.append(point)
+                cur = p3_end.copy()
         elif cmd in ('Z', 'z'):
             pts.append(start.copy())
             cur, start = start.copy(), start.copy()
             i += 1
         else:
             raise ValueError(f"Token inesperado: {cmd}")
+    
+    if not pts: # If no points were parsed, return empty array
+        return np.array([])
     return np.vstack(pts)
 
 def compute_curvature(pts):
     κ = np.zeros(len(pts))
-    for i in range(1, len(pts) - 1):
-        x0, y0 = pts[i - 1]
-        x1, y1 = pts[i]
-        x2, y2 = pts[i + 1]
-        dx, dy = (x2 - x0) / 2, (y2 - y0) / 2
-        d2x, d2y = x2 - 2 * x1 + x0, y2 - 2 * y1 + y0
-        denom = (dx * dx + dy * dy) ** 1.5
-        κ[i] = (dx * d2y - dy * d2x) / denom if denom else 0
+    if len(pts) < 3:
+        return κ
+    
+    dx = np.gradient(pts[:, 0])
+    dy = np.gradient(pts[:, 1])
+    d2x = np.gradient(dx)
+    d2y = np.gradient(dy)
+
+    numerator = dx * d2y - dy * d2x
+    denominator = (dx**2 + dy**2)**1.5
+    
+    κ = np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator!=0)
+
     return κ
 
 def detect_segments(pts, κ, thr):
     is_st = np.abs(κ) < thr
-    segs, idxs, typ = [], [], None
+    segs_raw, idxs, typ = [], [], None
     for i, st in enumerate(is_st):
         t = 'straight' if st else 'curve'
         if t != typ:
             if idxs:
-                segs.append((typ, idxs.copy()))
+                segs_raw.append((typ, idxs.copy()))
             idxs, typ = [i], t
         else:
             idxs.append(i)
     if idxs:
-        segs.append((typ, idxs))
-    return segs
+        segs_raw.append((typ, idxs))
+    return segs_raw
 
-def ensure_continuity(segs):
-    """Garantiza continuidad entre segmentos corrigiendo pequeños huecos"""
-    if not segs:
-        return segs
+def ensure_continuity(segs_data, original_pts):
+    """Ensures continuity between segments and closes the loop if needed."""
+    if not segs_data:
+        return []
 
-    # Asegurar que el circuito sea cerrado
-    first_point = None
-    last_point = None
+    processed_segments = []
+    
+    for typ, indices in segs_data:
+        if not indices: continue
+        
+        start_idx = indices[0]
+        end_idx = indices[-1] + 1 
+        
+        if end_idx > len(original_pts):
+            end_idx = len(original_pts)
+        
+        segment_points = original_pts[start_idx : end_idx]
+        
+        if len(segment_points) < 1: continue
 
-    for i, seg in enumerate(segs):
-        if seg['type'] == 'straight':
-            p0 = np.array(seg['p0'])
-            p1 = np.array(seg['p1'])
-            if i == 0:
-                first_point = p0
-            last_point = p1
-        else:
-            ctr = np.array(seg['controls'])
-            if i == 0:
-                first_point = ctr[0]
-            last_point = ctr[-1]
+        if typ == 'straight':
+            processed_segments.append({
+                'type': 'straight',
+                'p0': segment_points[0].tolist(),
+                'p1': segment_points[-1].tolist(),
+                'points': segment_points.tolist()
+            })
+        else: # curve
+            processed_segments.append({
+                'type': 'curve',
+                'points': segment_points.tolist()
+            })
 
-    # Si el circuito no está cerrado, añadir un segmento de conexión
-    if not np.allclose(first_point, last_point, atol=epsilon):
-        segs.append({
-            'type': 'straight',
-            'p0': last_point.tolist(),
-            'p1': first_point.tolist()
-        })
+    final_segments = []
+    if not processed_segments:
+        return []
 
-    # Corregir discontinuidades entre segmentos consecutivos
-    for i in range(len(segs) - 1):
-        current_seg = segs[i]
-        next_seg = segs[i + 1]
+    final_segments.append(processed_segments[0])
 
-        if current_seg['type'] == 'straight':
-            current_end = np.array(current_seg['p1'])
-        else:
-            current_end = np.array(current_seg['controls'][-1])
+    for i in range(len(processed_segments) - 1):
+        current_seg_end = np.array(processed_segments[i]['points'][-1])
+        next_seg_start = np.array(processed_segments[i+1]['points'][0])
 
-        if next_seg['type'] == 'straight':
-            next_start = np.array(next_seg['p0'])
-        else:
-            next_start = np.array(next_seg['controls'][0])
+        if not np.allclose(current_seg_end, next_seg_start, atol=epsilon):
+            # Add a connecting straight segment if there's a gap
+            final_segments.append({
+                'type': 'straight',
+                'p0': current_seg_end.tolist(),
+                'p1': next_seg_start.tolist(),
+                'points': [current_seg_end.tolist(), next_seg_start.tolist()]
+            })
+        final_segments.append(processed_segments[i+1])
 
-        # Si hay una discontinuidad, ajustar el punto de inicio del siguiente segmento
-        if not np.allclose(current_end, next_start, atol=epsilon):
-            if next_seg['type'] == 'straight':
-                next_seg['p0'] = current_end.tolist()
-            else:
-                next_seg['controls'][0] = current_end.tolist()
+    # Ensure the last point connects to the first point to close the loop
+    if final_segments and len(final_segments) > 1:
+        first_point_track = np.array(final_segments[0]['points'][0])
+        last_point_track = np.array(final_segments[-1]['points'][-1])
+        if not np.allclose(first_point_track, last_point_track, atol=epsilon):
+            final_segments.append({
+                'type': 'straight',
+                'p0': last_point_track.tolist(),
+                'p1': first_point_track.tolist(),
+                'points': [last_point_track.tolist(), first_point_track.tolist()]
+            })
 
-    return segs
+    return final_segments
+
 
 def segment_track(svg_path):
     tree = ET.parse(svg_path)
     root = tree.getroot()
     ns = {'svg': root.tag.split('}')[0].strip('{')}
-    raw = []
-    for e in root.findall('.//svg:path', ns):
-        ctr = parse_path_d(e.get('d'))
-        κ = savgol_filter(compute_curvature(ctr), window_size, 3)
-        raw += [(typ, ctr[idxs]) for typ, idxs in detect_segments(ctr, κ, curvature_threshold)]
-        break  # Solo procesamos el primer path
+    
+    # Use a list to collect all points from all paths
+    all_raw_points_list = [] 
 
-    if not raw:
+    # Iterate over all path elements and combine their parsed points
+    for e in root.findall('.//svg:path', ns):
+        path_pts_array = parse_path_d(e.get('d')) # parse_path_d now returns a numpy array
+        
+        if path_pts_array.size > 0: # Ensure path_pts is not empty
+            if all_raw_points_list: # If there are already points, connect
+                # Check if the last point of the previous path is close to the first point
+                # of the current path. If not, add a connecting straight segment.
+                last_pt_prev_path = all_raw_points_list[-1]
+                first_pt_curr_path = path_pts_array[0]
+                
+                if not np.allclose(last_pt_prev_path, first_pt_curr_path, atol=epsilon):
+                    # Generate a few points for the connecting line, avoiding too many
+                    num_connecting_points = max(2, int(np.linalg.norm(first_pt_curr_path - last_pt_prev_path) / 0.05)) # Dynamic based on distance
+                    connecting_line = np.linspace(last_pt_prev_path, first_pt_curr_path, num=num_connecting_points)
+                    all_raw_points_list.extend(connecting_line[1:].tolist()) # Add points as lists, exclude first to avoid duplication
+                
+                all_raw_points_list.extend(path_pts_array.tolist()) # Add current path points as lists
+            else: # First path, just add points
+                all_raw_points_list.extend(path_pts_array.tolist())
+
+    if not all_raw_points_list:
+        print("No se encontraron puntos de camino válidos en el SVG.")
         return []
 
-    # Reordenar si empieza con recta
-    if raw[0][0] == 'straight':
-        raw = raw[1:] + raw[:1]
+    # Convert the list of lists/arrays to a single NumPy array for further processing
+    all_combined_pts = np.array(all_raw_points_list)
 
-    recomb = []
-    for typ, pts in raw:
-        if recomb and recomb[-1][0] == typ:
-            recomb[-1] = (typ, np.vstack([recomb[-1][1], pts]))
-        else:
-            recomb.append((typ, pts))
+    # Apply Savitzky-Golay filter to curvature for smoothing
+    κ = compute_curvature(all_combined_pts)
+    # Ensure window_size is valid for savgol_filter
+    if len(κ) >= window_size and window_size % 2 == 1:
+        κ_smooth = savgol_filter(κ, window_size, 3)
+    else:
+        # Fallback if window_size is too large or not odd
+        print(f"Advertencia: window_size ({window_size}) es inválido para el número de puntos ({len(κ)}) o no es impar. No se aplicará el filtro Savitzky-Golay.")
+        κ_smooth = κ # Use raw curvature
 
-    segments = []
-    last_end = None
-
-    for typ, pts in recomb:
-        # Si hay un hueco con el segmento anterior, crear segmento recto de conexión
-        if last_end is not None and not np.allclose(pts[0], last_end, atol=epsilon):
-            segments.append({
-                'type': 'straight',
-                'p0': last_end.tolist(),
-                'p1': pts[0].tolist()
-            })
-
-        if typ == 'straight':
-            segment = {
-                'type': 'straight',
-                'p0': pts[0].tolist(),
-                'p1': pts[-1].tolist()
-            }
-            segments.append(segment)
-            last_end = pts[-1].copy()
-        else:
-            segment = {
-                'type': 'curve',
-                'points': pts.tolist()
-            }
-            segments.append(segment)
-            last_end = pts[-1].copy()
-
-    # Garantizar continuidad en todo el circuito
-    segments = ensure_continuity(segments)
-
+    raw_segments_detected = detect_segments(all_combined_pts, κ_smooth, curvature_threshold)
+    
+    segments = ensure_continuity(raw_segments_detected, all_combined_pts)
+    
     return segments
 
 def rescale_and_sample(segs):
     """Remuestrea y escala los segmentos manteniendo el tipo de segmento"""
     if not segs:
-        return [], [], [], [], []
+        return [], [], [], [], [], [], []
 
     # 1) Calcular longitud total de la pista
     total_length = 0
     for seg in segs:
-        if seg['type'] == 'straight':
-            p0 = np.array(seg['p0'])
-            p1 = np.array(seg['p1'])
-            total_length += np.linalg.norm(p1 - p0)
-        else:  # curve
-            pts = np.array(seg['points'])
+        pts = np.array(seg['points']) 
+        if len(pts) > 1:
             dx = np.diff(pts[:, 0])
             dy = np.diff(pts[:, 1])
-            total_length += np.sqrt(dx * dx + dy * dy).sum()
+            total_length += np.sum(np.sqrt(dx**2 + dy**2))
+
+    if total_length == 0:
+        print("La longitud total de la pista es cero. No se puede reescalar.")
+        return [], [], [], [], [], [], []
 
     # 2) Factor de escala
     factor = desired_length / total_length
@@ -233,85 +256,65 @@ def rescale_and_sample(segs):
     # 3) Procesar cada segmento
     all_xc, all_yc, all_b1x, all_b1y, all_b2x, all_b2y, all_types = [], [], [], [], [], [], []
 
-    for seg in segs:
-        if seg['type'] == 'straight':
-            p0 = np.array(seg['p0'])
-            p1 = np.array(seg['p1'])
-            
-            # Escalar puntos
-            p0 *= factor
-            p1 *= factor
-            
-            # Crear línea recta con puntos intermedios
-            num_seg_points = max(2, int(np.linalg.norm(p1 - p0) / total_length * num_points))
-            t = np.linspace(0, 1, num_seg_points)
-            xc = p0[0] + t * (p1[0] - p0[0])
-            yc = p0[1] + t * (p1[1] - p0[1])
-            
-            # Calcular normales
-            dx = p1[0] - p0[0]
-            dy = p1[1] - p0[1]
-            mag = np.sqrt(dx * dx + dy * dy)
-            if mag > 0:
-                nx, ny = -dy / mag, dx / mag
-            else:
-                nx, ny = 0, 0
-            
-            # Calcular bordes
-            b1x = xc + offset * nx
-            b1y = yc + offset * ny
-            b2x = xc - offset * nx
-            b2y = yc - offset * ny
-            
-            # Tipo (0 = recta)
-            seg_type = np.zeros(len(xc))
-            
-        else:  # curve
-            pts = np.array(seg['points'])
-            # Escalar puntos
-            pts *= factor
-            
-            # Calcular longitud del segmento
-            dx = np.diff(pts[:, 0])
-            dy = np.diff(pts[:, 1])
-            seg_length = np.sqrt(dx * dx + dy * dy).sum()
-            
-            # Número de puntos proporcional a la longitud
-            num_seg_points = max(10, int(seg_length / total_length * num_points))
-            
-            # Parametrización por longitud de arco
-            ds = np.concatenate([[0], np.cumsum(np.sqrt(np.diff(pts[:, 0])**2 + np.diff(pts[:, 1])**2))])
-            fx = interp1d(ds, pts[:, 0], kind='linear')
-            fy = interp1d(ds, pts[:, 1], kind='linear')
-            s_new = np.linspace(0, ds[-1], num_seg_points)
-            xc = fx(s_new)
-            yc = fy(s_new)
-            
-            # Calcular normales
-            dx = np.gradient(xc)
-            dy = np.gradient(yc)
-            mag = np.sqrt(dx * dx + dy * dy)
-            mag[mag == 0] = 1e-8
-            nx, ny = -dy / mag, dx / mag
-            
-            # Calcular bordes
-            b1x = xc + offset * nx
-            b1y = yc + offset * ny
-            b2x = xc - offset * nx
-            b2y = yc - offset * ny
-            
-            # Tipo (1 = curva)
-            seg_type = np.ones(len(xc))
+    for seg_idx, seg in enumerate(segs):
+        pts = np.array(seg['points']) * factor # Scale points for all segment types
         
-        # Agregar a los arrays globales
-        all_xc.extend(xc)
-        all_yc.extend(yc)
+        if len(pts) < 2:
+            continue 
+
+        # Calculate segment length after scaling
+        dx_seg = np.diff(pts[:, 0])
+        dy_seg = np.diff(pts[:, 1])
+        scaled_seg_length = np.sum(np.sqrt(dx_seg**2 + dy_seg**2))
+
+        # Determine number of points for this segment, proportional to its length
+        # Ensure a minimum number of points for very short segments
+        # The total number of points `num_points` is distributed proportionally.
+        num_seg_points = max(2, int(num_points * (scaled_seg_length / desired_length)))
+        
+        # Arc length parametrization for uniform sampling
+        distances = np.concatenate(([0], np.cumsum(np.sqrt(dx_seg**2 + dy_seg**2))))
+        
+        if distances[-1] == 0: 
+            xc_segment = [pts[0,0]]
+            yc_segment = [pts[0,1]]
+        else:
+            fx = interp1d(distances, pts[:, 0], kind='linear', fill_value="extrapolate")
+            fy = interp1d(distances, pts[:, 1], kind='linear', fill_value="extrapolate")
+            s_new = np.linspace(0, distances[-1], num_seg_points)
+            xc_segment = fx(s_new)
+            yc_segment = fy(s_new)
+
+        # Calculate normals for the resampled points
+        if len(xc_segment) > 1:
+            dx_resampled = np.gradient(xc_segment)
+            dy_resampled = np.gradient(yc_segment)
+            mag_resampled = np.sqrt(dx_resampled**2 + dy_resampled**2)
+            mag_resampled[mag_resampled == 0] = 1e-8 # Avoid division by zero
+            nx = -dy_resampled / mag_resampled
+            ny = dx_resampled / mag_resampled
+        else: # Single point segment
+            nx = np.array([0.0])
+            ny = np.array([0.0])
+
+        # Calculate borders
+        b1x = xc_segment + offset * nx
+        b1y = yc_segment + offset * ny
+        b2x = xc_segment - offset * nx
+        b2y = yc_segment - offset * ny
+
+        # Assign segment type (0 for straight, 1 for curve)
+        seg_type_val = 0 if seg['type'] == 'straight' else 1
+        segment_type = np.full(len(xc_segment), seg_type_val)
+        
+        all_xc.extend(xc_segment)
+        all_yc.extend(yc_segment)
         all_b1x.extend(b1x)
         all_b1y.extend(b1y)
         all_b2x.extend(b2x)
         all_b2y.extend(b2y)
-        all_types.extend(seg_type)
-    
+        all_types.extend(segment_type)
+            
     return all_xc, all_yc, all_b1x, all_b1y, all_b2x, all_b2y, all_types
 
 def export_csv(svg_path):
@@ -321,14 +324,18 @@ def export_csv(svg_path):
     # Segmentar la pista primero
     segs = segment_track(svg_path)
     if not segs:
-        print("No se encontraron segmentos en el SVG.")
+        print("No se encontraron segmentos en el SVG o el procesamiento falló.")
         return
-    
+        
     # Remuestrear y escalar con información de segmentos
     xc, yc, b1x, b1y, b2x, b2y, segment_types = rescale_and_sample(segs)
     
+    if not xc: # Check if points were generated after resampling
+        print("No se generaron puntos después del remuestreo y escalado.")
+        return
+
     # Guardar CSV
-    csvf = os.path.join('output_csv',
+    csvf = os.path.join('output_csv', 
                         os.path.splitext(os.path.basename(svg_path))[0] + '.csv')
     with open(csvf, 'w', newline='') as f:
         w = csv.writer(f)

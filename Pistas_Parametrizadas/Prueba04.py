@@ -1,99 +1,65 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog
 from svgpathtools import svg2paths
-from scipy.interpolate import interp1d
-from tkinter import Tk
-from tkinter.filedialog import askopenfilename
+import numpy as np
 
-# Parámetros
-ancho_extra   = 1        # Ancho total de la pista
-num_points    = 600      # Número de puntos para la línea central
-desired_length= 400      # Longitud deseada para la pista
+def seleccionar_svg():
+    """Abre un diálogo para seleccionar un archivo SVG y devuelve su ruta."""
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="Selecciona un archivo SVG de circuito",
+        filetypes=[("Archivos SVG", "*.svg")]
+    )
+    root.destroy()
+    return file_path
 
-# ——— Selección de archivo SVG vía diálogo ———
-root = Tk()
-root.withdraw()
-svg_file = askopenfilename(
-    title="Selecciona un archivo SVG",
-    filetypes=[("SVG files", "*.svg"), ("All files", "*.*")]
-)
-if not svg_file:
-    print("No se seleccionó ningún archivo. Saliendo.")
-    exit()
+def seleccionar_destino_csv(default_name="pista_puntos.csv"):
+    """Abre un diálogo para elegir dónde y con qué nombre guardar el CSV."""
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.asksaveasfilename(
+        title="Guardar puntos extraídos como",
+        defaultextension=".csv",
+        initialfile=default_name,
+        filetypes=[("Archivos CSV", "*.csv")]
+    )
+    root.destroy()
+    return file_path
 
-# Cargar el SVG
-paths, attributes = svg2paths(svg_file)
+def extraer_puntos_de_svg(svg_file, sample_points=None):
+    """Extrae puntos de la trayectoria más larga dentro de un SVG."""
+    paths, _ = svg2paths(svg_file)
+    longest_path = max(paths, key=len)
+    print(f"El path más largo tiene {len(longest_path)} segmentos")
+    if sample_points is None:
+        sample_points = np.linspace(0, 1, 100)
+    return [(longest_path.point(t).real, longest_path.point(t).imag) for t in sample_points]
 
-# Extraer coordenadas del path
-x_coords, y_coords = [], []
-for path in paths:
-    for segment in path:
-        for t in np.linspace(0, 1, num=10000):
-            pt = segment.point(t)
-            x_coords.append(pt.real)
-            y_coords.append(-pt.imag)  # invertimos Y
+def guardar_a_csv(puntos, output_filename):
+    """Guarda la lista de tuplas (x, y) en un archivo CSV."""
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write("x,y\n")
+        for x, y in puntos:
+            f.write(f"{x},{y}\n")
+    print(f"Puntos extraídos y guardados en {output_filename}")
 
-x_coords = np.array(x_coords)
-y_coords = np.array(y_coords)
+if __name__ == "__main__":
+    # 1) Selección de SVG
+    svg_path = seleccionar_svg()
+    if not svg_path:
+        print("No se seleccionó ningún SVG. Saliendo.")
+        exit()
 
-# Función para calcular longitud
-def calculate_length(x, y):
-    d = np.sqrt(np.diff(x)**2 + np.diff(y)**2)
-    return d.sum()
+    # 2) Definir los ts donde muestrear
+    sample_ts = [0.01, 0.10, 0.50, 0.99]  # o usa None para 100 puntos uniformes
+    puntos = extraer_puntos_de_svg(svg_path, sample_points=sample_ts)
 
-original_length = calculate_length(x_coords, y_coords)
-scale_factor    = desired_length / original_length
+    # 3) Selección de destino CSV
+    csv_path = seleccionar_destino_csv()
+    if not csv_path:
+        print("No se definió ruta de salida para el CSV. Saliendo.")
+        exit()
 
-# Escalado
-x_full = x_coords * scale_factor
-y_full = y_coords * scale_factor
-
-# Longitud acumulada para parametrización por arco
-distances = np.sqrt(np.diff(x_full)**2 + np.diff(y_full)**2)
-cum_dist  = np.concatenate([[0], np.cumsum(distances)])
-total_len = cum_dist[-1]
-
-# Puntos equidistantes
-s_new = np.linspace(0, total_len, num_points)
-interp_x = interp1d(cum_dist, x_full, kind='linear')
-interp_y = interp1d(cum_dist, y_full, kind='linear')
-x_central = interp_x(s_new)
-y_central = interp_y(s_new)
-
-# Tangentes y normales
-dx = np.gradient(x_central)
-dy = np.gradient(y_central)
-mag = np.hypot(dx, dy)
-mag[mag==0] = 1e-10
-nx = -dy / mag
-ny = dx / mag
-
-# Bordes
-x_border1 = x_central + (ancho_extra/2)*nx
-y_border1 = y_central + (ancho_extra/2)*ny
-x_border2 = x_central - (ancho_extra/2)*nx
-y_border2 = y_central - (ancho_extra/2)*ny
-
-# Graficar
-plt.figure(figsize=(10,10))
-plt.plot(x_full, y_full,   color="lightgray", linewidth=1, label="Pista completa")
-plt.plot(x_central, y_central, 'r-', linewidth=2, label="Línea central")
-plt.plot(x_border1, y_border1, 'b-', linewidth=2, label="Borde 1")
-plt.plot(x_border2, y_border2, 'g-', linewidth=2, label="Borde 2")
-plt.axis("equal")
-plt.xlabel("X (m)")
-plt.ylabel("Y (m)")
-plt.title("Pista de carreras con línea central y dos bordes")
-plt.legend()
-plt.grid(True)
-plt.show()
-
-# Guardar CSV
-all_data = np.column_stack((x_central, y_central, x_border1, y_border1, x_border2, y_border2))
-out_csv = "pista_completa.csv"
-np.savetxt(
-    out_csv, all_data, delimiter=",",
-    header="x_central,y_central,x_border1,y_border1,x_border2,y_border2",
-    comments=""
-)
-print(f"Archivo CSV '{out_csv}' guardado con éxito.")
+    # 4) Guardar CSV
+    guardar_a_csv(puntos, csv_path)
