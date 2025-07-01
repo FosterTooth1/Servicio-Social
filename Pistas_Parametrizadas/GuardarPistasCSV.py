@@ -18,8 +18,8 @@ window_size = 15 # Must be odd
 epsilon = 1e-5  # Tolerancia para coincidencia de puntos
 
 # ——— Parámetros de reescalado ———
-desired_length = 400  # longitud deseada de la pista
-num_points = 600  # número total deseado de puntos en la línea central tras remuestreo
+desired_length = 600  # longitud deseada de la pista
+num_points = 800  # número total deseado de puntos en la línea central tras remuestreo
 
 COMMANDS = set('MmLlCcZz')
 TOKEN_RE = re.compile(r'[MmLlCcZz]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?')
