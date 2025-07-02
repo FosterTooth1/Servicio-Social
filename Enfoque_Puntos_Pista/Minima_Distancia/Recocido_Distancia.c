@@ -305,7 +305,7 @@ int main() {
     actual->ruta.puntos = NULL;
 
     // Nombre del archivo con las distancias
-    char *nombre_archivo = "pista_escalada.csv";
+    char *nombre_archivo = "C:\\Users\\albsa\\Desktop\\Servicio Social\\Escalado_Pistas\\Pista_completa.csv";
 
     // Leer los puntos del archivo y guardar en la ruta actual
     leer_puntos(&actual->ruta, nombre_archivo, &num_puntos);

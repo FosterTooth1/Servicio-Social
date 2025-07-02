@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from svgpathtools import svg2paths
 from scipy.interpolate import interp1d  # Importar interp1d para interpolación
+# Para el diálogo de selección de archivo
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
 
 # Parámetros
 ancho_extra = 1        # Ancho total de la pista
@@ -9,7 +12,18 @@ num_points = 1000       # Número de puntos para la línea central
 desired_length = 400    # Longitud deseada para la pista
 
 # Cargar el archivo SVG
-svg_file = "Pistas Limpias/Autódromo_Hermanos_Rodríguez_2015 (Limpia).svg"
+root = Tk()
+root.withdraw()
+# Abre el diálogo y permite seleccionar solo archivos .svg
+svg_file = askopenfilename(
+    title="Selecciona el archivo SVG",
+    filetypes=[("Archivos SVG", "*.svg"), ("Todos los archivos", "*.*")]
+)
+root.destroy()
+if not svg_file:
+    raise FileNotFoundError("No se ha seleccionado ningún archivo SVG.")
+
+# Leer el archivo SVG y extraer los paths
 paths, attributes = svg2paths(svg_file)
 
 # Extraer coordenadas del path
@@ -88,6 +102,6 @@ plt.show()
 
 # Guardar en CSV
 all_data = np.column_stack((x_central, y_central, x_border1, y_border1, x_border2, y_border2))
-np.savetxt("pista_completa.csv", all_data, delimiter=",", header="x_central,y_central,x_border1,y_border1,x_border2,y_border2", comments="")
+np.savetxt("Pista_completa.csv", all_data, delimiter=",", header="x_central,y_central,x_border1,y_border1,x_border2,y_border2", comments="")
 
-print("Archivo CSV 'pista_completa.csv' guardado con éxito.")
+print("Archivo CSV 'Pista_completa.csv' guardado con éxito.")

@@ -25,7 +25,7 @@ void rectificar_circuito(Circuito *Circuito);
 double evaluar_fitness(Circuito *Circuito);
 
 void leer_puntos(Circuito *Circuito) {
-    FILE *archivo = fopen("pista_escalada.csv", "r");
+    FILE *archivo = fopen("C:\\Users\\albsa\\Desktop\\Servicio Social\\Escalado_Pistas\\Pista_completa.csv", "r");
     if (archivo == NULL) {
         perror("Error al abrir el archivo");
         exit(EXIT_FAILURE);

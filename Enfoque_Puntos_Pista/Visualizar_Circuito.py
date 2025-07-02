@@ -1,6 +1,19 @@
-import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
+
+def seleccionar_csv():
+    root = Tk()
+    root.withdraw()  # Oculta la ventana principal de Tkinter
+    filename = askopenfilename(
+        title="Selecciona el archivo CSV",
+        filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+    )
+    root.destroy()
+    if not filename:
+        raise FileNotFoundError("No se ha seleccionado ningún archivo CSV.")
+    return filename
 
 def visualizar_csv(filename):
     # Leer CSV
@@ -21,7 +34,6 @@ def visualizar_csv(filename):
 
     # Crear figura
     plt.figure(figsize=(8, 6))
-    # Scatter; sin especificar color explícito, matplotlib usará la paleta por defecto
     plt.scatter(x_c, y_c, label="Central", s=20)
     plt.scatter(x_b1, y_b1, label="Borde Externo", s=20)
     plt.scatter(x_b2, y_b2, label="Borde Interno", s=20)
@@ -36,14 +48,10 @@ def visualizar_csv(filename):
     plt.show()
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Visualiza los puntos central, externo e interno desde un CSV.")
-    parser.add_argument(
-        "csv_file",
-        help="Ruta al archivo CSV con columnas: x_central,y_central,x_border1,y_border1,x_border2,y_border2")
-    args = parser.parse_args()
     try:
-        visualizar_csv(args.csv_file)
+        csv_file = seleccionar_csv()
+        print(f"Archivo seleccionado: {csv_file}")
+        visualizar_csv(csv_file)
     except Exception as e:
         print(f"Error: {e}")
 
