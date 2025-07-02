@@ -36,7 +36,7 @@ void leer_puntos(Circuito *circuito, char* nombre_archivo, int *num_puntos);
 void imprimir_puntos(Circuito *circuito, int num_puntos);
 void liberar_puntos(Circuito *circuito);
 void determinar_limites_interno_externo(const Punto *p, double *xi, double *yi, double *xe, double *ye);
-double calcular_distancia_dos_puntos(const Punto *p1, const Punto *p2);
+double calcular_angulo_tres_puntos(const Punto *p1, const Punto *p2, const Punto *p3);
 void crear_individuo(Circuito *circuito, int num_puntos);
 void rectificar_circuito(Circuito *circuito, int num_puntos);
 double evaluar_fitness(Circuito *circuito, int num_puntos);
@@ -88,11 +88,28 @@ void crear_individuo(Circuito *circuito, int num_puntos) {
     }
 }
 
-// Calcula la distancia entre dos puntos
-double calcular_distancia_dos_puntos(const Punto *p1, const Punto *p2) {
-    double dx = p2->x - p1->x;
-    double dy = p2->y - p1->y;
-    return sqrt(dx * dx + dy * dy);
+// Calcula ángulo en grados entre tres puntos
+double calcular_angulo_tres_puntos(const Punto *p1, const Punto *p2, const Punto *p3) {
+    double vec1_x = p2->x - p1->x;
+    double vec1_y = p2->y - p1->y;
+    double vec2_x = p3->x - p2->x;
+    double vec2_y = p3->y - p2->y;
+
+    double dot = vec1_x * vec2_x + vec1_y * vec2_y;
+    double mag1 = sqrt(vec1_x * vec1_x + vec1_y * vec1_y);
+    double mag2 = sqrt(vec2_x * vec2_x + vec2_y * vec2_y);
+    
+    if (mag1 == 0.0 || mag2 == 0.0) {
+        return 0.0;
+    }
+    
+    double cos_theta = dot / (mag1 * mag2);
+    // Asegurar valor dentro de rango [-1, 1]
+    if (cos_theta > 1.0) cos_theta = 1.0;
+    if (cos_theta < -1.0) cos_theta = -1.0;
+    
+    double ang_rad = acos(cos_theta);
+    return ang_rad * (180.0 / M_PI);
 }
 
 // Rectifica el circuito usando parámetro t
@@ -128,8 +145,8 @@ void rectificar_circuito(Circuito *circuito, int num_puntos) {
         if (t_actual < 0.0) t_actual = 0.0;
         if (t_actual > 1.0) t_actual = 1.0;
 
-        // Distancia original
-        double distancia_original = calcular_distancia_dos_puntos(p1, p2);
+        // Ángulo original
+        double angulo_original = calcular_angulo_tres_puntos(p1, p2, p3);
         double x_orig = p2->x;
         double y_orig = p2->y;
 
@@ -154,9 +171,9 @@ void rectificar_circuito(Circuito *circuito, int num_puntos) {
             p2->x = xi + t_nuevo * vx;
             p2->y = yi + t_nuevo * vy;
 
-            // Verificar si mejora la distancia
-            double nueva_distancia = calcular_distancia_dos_puntos(p1, p2);
-            if (nueva_distancia > distancia_original) {
+            // Verificar si mejora el ángulo
+            double nuevo_angulo = calcular_angulo_tres_puntos(p1, p2, p3);
+            if (nuevo_angulo > angulo_original) {
                 // Revertir si empeora
                 p2->x = x_orig;
                 p2->y = y_orig;
@@ -165,21 +182,21 @@ void rectificar_circuito(Circuito *circuito, int num_puntos) {
     }
 }
 
-// Evalúa fitness como suma de distancias entre puntos
+// Evalúa fitness como suma de ángulos
 double evaluar_fitness(Circuito *circuito, int num_puntos) {
     if (circuito == NULL || circuito->puntos == NULL) return 0.0;
     if (num_puntos < 3) return 0.0;
     
-    double suma_distancias = 0.0;
+    double suma_angulos = 0.0;
     for (int i = 0; i < num_puntos - 2; ++i) {
         const Punto *p1 = &circuito->puntos[i];
         const Punto *p2 = &circuito->puntos[i + 1];
         const Punto *p3 = &circuito->puntos[i + 2];
         
-        double ang = calcular_distancia_dos_puntos(p1, p2);
-        suma_distancias += ang;
+        double ang = calcular_angulo_tres_puntos(p1, p2, p3);
+        suma_angulos += ang;
     }
-    return suma_distancias;
+    return suma_angulos;
 }
 
 double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, double temperatura) {
@@ -293,8 +310,8 @@ int main() {
     int num_puntos = 0;
     double temperatura_inicial;
     double temperatura_final = 0.000001;
-    int num_generaciones = 1000000;
-    //int num_generaciones = 10000;
+    //int num_generaciones = 1000000;
+    int num_generaciones = 10000;
 
     // Parámetros adaptativos
     const int max_neighbours = 6000;
@@ -323,12 +340,12 @@ int main() {
     mejor->fitness = actual->fitness;
 
     // Imprimir el fitness inicial
-    printf("Fitness inicial: %.2f metros\n", actual->fitness);
+    printf("Fitness inicial: %.2f grados\n", actual->fitness);
 
     // Rectificar el circuito inicial
     rectificar_circuito(&actual->ruta, num_puntos);
     actual->fitness = evaluar_fitness(&actual->ruta, num_puntos);
-    printf("Fitness después de rectificar: %.2f metros\n", actual->fitness);
+    printf("Fitness después de rectificar: %.2f grados\n", actual->fitness);
 
     // Calcular la temperatura inicial
     double suma = 0, suma_cuadrados = 0;
@@ -347,7 +364,7 @@ int main() {
     }
 
     double desviacion = sqrt((suma_cuadrados - suma * suma / 100) / 99);
-    temperatura_inicial = desviacion * 100;
+    temperatura_inicial = desviacion;
     printf("Temperatura inicial: %.6f\n", temperatura_inicial);
     
     double temperatura = temperatura_inicial;
@@ -391,12 +408,12 @@ int main() {
         }
 
         // Mostrar progreso
-        printf("Iter %d | Temp = %.6f | Neighbors = %d | Successes = %d | Mejor = %.2f metros\n",
+        printf("Iter %d | Temp = %.6f | Neighbors = %d | Successes = %d | Mejor = %.2f grados\n",
                iter, temperatura, neighbours, successes, mejor->fitness);
     }
 
     // Guardar y liberar recursos
-    guardar_solucion_csv("solucion_distancia_v2.csv", mejor, num_puntos);
+    guardar_solucion_csv("Solucion_Angulo.csv", mejor, num_puntos);
     liberar_solucion(actual);
     liberar_solucion(mejor);
 
