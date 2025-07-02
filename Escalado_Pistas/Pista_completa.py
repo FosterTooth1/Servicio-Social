@@ -102,5 +102,6 @@ plt.show()
 
 # Guardar en CSV
 all_data = np.column_stack((x_central, y_central, x_border1, y_border1, x_border2, y_border2))
-np.savetxt("C:\\Users\\albsa\\Desktop\\Servicio Social\\Escalado_Pistas\\Pista_completa.csv", all_data, delimiter=",", header="x_central,y_central,x_border1,y_border1,x_border2,y_border2", comments="")
+np.savetxt("Pista_completa.csv", all_data, delimiter=",", header="x_central,y_central,x_border1,y_border1,x_border2,y_border2", comments="")
+
 print("Archivo CSV 'Pista_completa.csv' guardado con éxito.")
