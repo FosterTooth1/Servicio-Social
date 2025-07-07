@@ -184,7 +184,7 @@ void rectificar_circuito(Circuito *circuito, int num_puntos) {
             // Si ninguna métrica mejora se restaura la posición original
             // Nota: Se acepta si el ángulo es menor o igual al original
             //       o si la distancia es menor o igual a la original
-            if (angulo_new >= angulo_orig || dist_new >= dist_orig) {
+            if (angulo_new >= angulo_orig && dist_new >= dist_orig) {
                 p2->x = x_orig;
                 p2->y = y_orig;
             }
