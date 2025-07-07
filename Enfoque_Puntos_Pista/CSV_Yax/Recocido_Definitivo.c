@@ -96,7 +96,7 @@ double calcular_distancia_dos_puntos(const Punto *p1, const Punto *p2) {
 }
 
 // Calcula ángulo en grados entre tres puntos
-double calcular_distanciaulo_tres_puntos(const Punto *p1, const Punto *p2, const Punto *p3) {
+double calcular_angulo_tres_puntos(const Punto *p1, const Punto *p2, const Punto *p3) {
     double vec1_x = p2->x - p1->x;
     double vec1_y = p2->y - p1->y;
     double vec2_x = p3->x - p2->x;
@@ -125,13 +125,13 @@ void rectificar_circuito(Circuito *circuito, int num_puntos) {
     if (num_puntos < 3) return;
 
     const double Pm = 0.01;  // Probabilidad de modificación
-    const int Nm = 100;     // Parámetro de distribución
+    const int Nm = 100;      // Parámetro de distribución
 
     for (int i = 0; i < num_puntos - 2; ++i) {
         Punto *p1 = &circuito->puntos[i];
         Punto *p2 = &circuito->puntos[i + 1];
         Punto *p3 = &circuito->puntos[i + 2];
-        
+
         // Determinar límites interno/externo para p2
         double xi, yi, xe, ye;
         determinar_limites_interno_externo(p2, &xi, &yi, &xe, &ye);
@@ -140,117 +140,89 @@ void rectificar_circuito(Circuito *circuito, int num_puntos) {
         double vx = xe - xi;
         double vy = ye - yi;
         double len2 = vx*vx + vy*vy;
-        if (len2 < 1e-12) {
-            continue;
-        }
+        if (len2 < 1e-12) continue;
 
         // Calcular t actual
-        double t_actual;
         double wx = p2->x - xi;
         double wy = p2->y - yi;
-        t_actual = (wx * vx + wy * vy) / len2;
+        double t_actual = (wx * vx + wy * vy) / len2;
         if (t_actual < 0.0) t_actual = 0.0;
         if (t_actual > 1.0) t_actual = 1.0;
 
-        if( p2->is_curve) {
-            // Si es curva, usar ángulo
-            double distanciaulo_actual = calcular_distanciaulo_tres_puntos(p1, p2, p3);
-            double x_orig = p2->x;
-            double y_orig = p2->y;
+        // Métricas originales
+        double angulo_orig = calcular_angulo_tres_puntos(p1, p2, p3);
+        double dist_orig   = calcular_distancia_dos_puntos(p1, p2);
 
-            // Intentar modificación con probabilidad Pm
-            if (rand_double_0_1() <= Pm) {
-                double delta_pos = fmin(t_actual, 1.0 - t_actual);
-                double r = rand_double_0_1();
-                double deltaq_t;
+        double x_orig = p2->x;
+        double y_orig = p2->y;
 
-                if (r <= 0.5) {
-                    deltaq_t = pow(2 * r + (1 - 2 * r) * pow(1 - delta_pos, Nm + 1), 1.0 / (Nm + 1)) - 1;
-                } else {
-                    deltaq_t = 1 - pow(2 * (1 - r) + 2 * (r - 0.5) * pow(1 - delta_pos, Nm + 1), 1.0 / (Nm + 1));
-                }
-
-                // Nuevo valor de t
-                double t_nuevo = t_actual + deltaq_t;
-                if (t_nuevo < 0.0) t_nuevo = 0.0;
-                if (t_nuevo > 1.0) t_nuevo = 1.0;
-
-                // Actualizar posición
-                p2->x = xi + t_nuevo * vx;
-                p2->y = yi + t_nuevo * vy;
-
-                // Verificar si mejora el ángulo
-                double nuevo_distanciaulo = calcular_distanciaulo_tres_puntos(p1, p2, p3);
-                if (nuevo_distanciaulo > distanciaulo_actual) {
-                    // Revertir si empeora
-                    p2->x = x_orig;
-                    p2->y = y_orig;
-                }
+        // Intentar modificación con probabilidad Pm
+        if (rand_double_0_1() <= Pm) {
+            // Calcula deltaq_t (misma distribución para ambos casos)
+            double delta_pos = fmin(t_actual, 1.0 - t_actual);
+            double r = rand_double_0_1();
+            double deltaq_t;
+            if (r <= 0.5) {
+                deltaq_t = pow(2 * r + (1 - 2 * r) * pow(1 - delta_pos, Nm + 1), 1.0 / (Nm + 1)) - 1;
+            } else {
+                deltaq_t = 1 - pow(2 * (1 - r) + 2 * (r - 0.5) * pow(1 - delta_pos, Nm + 1), 1.0 / (Nm + 1));
             }
-        }
-        else {
-            // Distancia original
-            double distancia_original = calcular_distancia_dos_puntos(p1, p2);
-            double x_orig = p2->x;
-            double y_orig = p2->y;
 
-            // Intentar modificación con probabilidad Pm
-            if (rand_double_0_1() <= Pm) {
-                double delta_pos = fmin(t_actual, 1.0 - t_actual);
-                double r = rand_double_0_1();
-                double deltaq_t;
+            // Nuevo valor de t
+            double t_nuevo = t_actual + deltaq_t;
+            if (t_nuevo < 0.0) t_nuevo = 0.0;
+            if (t_nuevo > 1.0) t_nuevo = 1.0;
 
-                if (r <= 0.5) {
-                    deltaq_t = pow(2 * r + (1 - 2 * r) * pow(1 - delta_pos, Nm + 1), 1.0 / (Nm + 1)) - 1;
-                } else {
-                    deltaq_t = 1 - pow(2 * (1 - r) + 2 * (r - 0.5) * pow(1 - delta_pos, Nm + 1), 1.0 / (Nm + 1));
-                }
+            // Actualizar posición provisional
+            p2->x = xi + t_nuevo * vx;
+            p2->y = yi + t_nuevo * vy;
 
-                // Nuevo valor de t
-                double t_nuevo = t_actual + deltaq_t;
-                if (t_nuevo < 0.0) t_nuevo = 0.0;
-                if (t_nuevo > 1.0) t_nuevo = 1.0;
+            // Calcular métricas tras el movimiento
+            double angulo_new = calcular_angulo_tres_puntos(p1, p2, p3);
+            double dist_new   = calcular_distancia_dos_puntos(p1, p2);
 
-                // Actualizar posición
-                p2->x = xi + t_nuevo * vx;
-                p2->y = yi + t_nuevo * vy;
-
-                // Verificar si mejora la distancia
-                double nueva_distancia = calcular_distancia_dos_puntos(p1, p2);
-                if (nueva_distancia > distancia_original) {
-                    // Revertir si empeora
-                    p2->x = x_orig;
-                    p2->y = y_orig;
-                }
+            // Si ninguna métrica mejora se restaura la posición original
+            // Nota: Se acepta si el ángulo es menor o igual al original
+            //       o si la distancia es menor o igual a la original
+            if (angulo_new >= angulo_orig || dist_new >= dist_orig) {
+                p2->x = x_orig;
+                p2->y = y_orig;
             }
         }
     }
 }
 
-// Evalúa fitness como suma de distancias entre puntos
+
 double evaluar_fitness(Circuito *circuito, int num_puntos) {
     if (circuito == NULL || circuito->puntos == NULL) return 0.0;
     if (num_puntos < 3) return 0.0;
     
     double suma_distancias = 0.0;
-    double angulo_total = 0.0;
-    double costo_total = 0.0;
-    for (int i = 0; i < num_puntos - 2; ++i) {
-        const Punto *p1 = &circuito->puntos[i];
-        const Punto *p2 = &circuito->puntos[i + 1];
-        const Punto *p3 = &circuito->puntos[i + 2];
-        
-        double distancia = calcular_distancia_dos_puntos(p1, p2);
-        suma_distancias += distancia;
-
-        double angulo = calcular_distanciaulo_tres_puntos(p1, p2, p3);
-        angulo_total += angulo;
+    double suma_curvatura = 0.0;
+    
+    // Calcular distancia total
+    for (int i = 0; i < num_puntos - 1; ++i) {
+        suma_distancias += calcular_distancia_dos_puntos(&circuito->puntos[i], &circuito->puntos[i+1]);
     }
-
-    // Costo total es la suma de distancias más el ángulo total
-    costo_total = suma_distancias + angulo_total;
-
-    return suma_distancias;
+    
+    // Calcular curvatura ponderada
+    for (int i = 0; i < num_puntos - 2; ++i) {
+        double angulo = calcular_angulo_tres_puntos(
+            &circuito->puntos[i],
+            &circuito->puntos[i+1],
+            &circuito->puntos[i+2]
+        );
+        
+        // Ponderación mayor en curvas
+        if (circuito->puntos[i+1].is_curve) {
+            suma_curvatura += 3.0 * angulo; // Mayor peso en curvas
+        } else {
+            suma_curvatura += angulo;        // Peso normal en rectas
+        }
+    }
+    
+    // Combinación de métricas
+    return (0.4 * suma_distancias) + (0.6 * suma_curvatura);
 }
 
 double probabilidad_aceptacion(double fitness_actual, double fitness_vecino, double temperatura) {
@@ -375,8 +347,8 @@ int main() {
     int num_puntos = 0;
     double temperatura_inicial;
     double temperatura_final = 0.000001;
-    int num_generaciones = 1000000;
-    //int num_generaciones = 10000;
+    //int num_generaciones = 1000000;
+    int num_generaciones = 10000;
 
     // Parámetros adaptativos
     const int max_neighbours = 6000;
@@ -429,7 +401,7 @@ int main() {
     }
 
     double desviacion = sqrt((suma_cuadrados - suma * suma / 100) / 99);
-    temperatura_inicial = desviacion * 100;
+    temperatura_inicial = desviacion * 1; // Ajuste de escala
     printf("Temperatura inicial: %.6f\n", temperatura_inicial);
     
     double temperatura = temperatura_inicial;
@@ -478,7 +450,7 @@ int main() {
     }
 
     // Guardar y liberar recursos
-    guardar_solucion_csv("Solucion_Distancia.csv", mejor, num_puntos);
+    guardar_solucion_csv("Solucion_Definitiva.csv", mejor, num_puntos);
     liberar_solucion(actual);
     liberar_solucion(mejor);
 
