@@ -2,7 +2,7 @@
 <track>
   <section name="Header">
     <attstr name="name" val="custom-track" />
-    <attstr name="category" val="circuit" />
+    <attstr name="category" val="mytracks"/>
     <attnum name="version" val="1" />
   </section>
   <section name="Local Info">
