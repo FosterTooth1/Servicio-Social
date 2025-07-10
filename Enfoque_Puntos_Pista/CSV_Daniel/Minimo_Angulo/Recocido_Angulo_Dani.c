@@ -104,7 +104,7 @@ double calcular_radio_tres_puntos(const Punto *p1, const Punto *p2, const Punto 
         p3->x * (p1->y - p2->y)
     );
 
-    // Si el área es cero, los puntos son colineales → radio infinito
+    // Si el área es cero, los puntos son colineales → radio despreciable
     if (A == 0.0) {
         return 0.0;
     }
