@@ -253,6 +253,8 @@ void liberar_solucion(Solucion *actual) {
     }
 }
 
+// ... (previous code)
+
 // Guarda solución en formato CSV
 void guardar_solucion_csv(const char *nombre_archivo, Solucion *sol, int num_puntos) {
     if (sol == NULL || sol->ruta.puntos == NULL) {
@@ -264,19 +266,22 @@ void guardar_solucion_csv(const char *nombre_archivo, Solucion *sol, int num_pun
         perror("Error al abrir archivo para guardar solución");
         return;
     }
-    // Cabecera: solución y bordes
-    fprintf(f, "x_solution,y_solution,x_border1,y_border1,x_border2,y_border2,is_curve\n");
+    // --- CAMBIO AQUI: Nombres de las columnas para que coincidan con tu script Python ---
+    fprintf(f, "x_central,y_central,x_border1,y_border1,x_border2,y_border2,is_curve\n");
+    // ----------------------------------------------------------------------------------
     for (int i = 0; i < num_puntos; ++i) {
         Punto *p = &sol->ruta.puntos[i];
         fprintf(f,
                 "%.18e,%.18e,%.18e,%.18e,%.18e,%.18e,%d\n",
-                p->x, p->y,
+                p->x, p->y, // Esto ahora se mapea a x_central, y_central en el encabezado
                 p->x_border1, p->y_border1,
                 p->x_border2, p->y_border2,
                 p->is_curve ? 1 : 0);
     }
     fclose(f);
 }
+
+// ... (rest of the code)
 
 // Lee puntos desde archivo CSV
 void leer_puntos(Circuito *circuito, char* nombre_archivo, int *num_puntos) {
