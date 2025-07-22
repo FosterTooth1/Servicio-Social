@@ -9,7 +9,7 @@
 
 // --- NUEVAS DEFINICIONES PARA CONDICIONES DE PARADA ---
 #define TARGET_FITNESS 0.1 // Ejemplo: Ajusta este valor según lo que consideres una solución "buena".
-#define MAX_ITER_WITHOUT_IMPROVEMENT 2000 // Número máximo de iteraciones sin una mejora significativa antes de detenerse.
+#define MAX_ITER_WITHOUT_IMPROVEMENT 1000 // Número máximo de iteraciones sin una mejora significativa antes de detenerse.
 // ----------------------------------------------------
 
 // Estructura de punto con coordenadas centrales y bordes
