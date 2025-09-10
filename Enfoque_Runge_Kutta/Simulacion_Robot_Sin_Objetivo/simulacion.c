@@ -96,7 +96,7 @@ EXPORT void liberar_resultado(SimulationResult* res) {
 }
 #endif
 
-// --- Implementación de Runge–Kutta y funciones helper ---
+// Implementación de Runge–Kutta y funciones auxiliares
 
 void runge_kutta(float delta_t, float* cond_x, float* cond_y, float* cond_phi,
                  float* cond_vl, float* cond_vr, float* cond_u1, float* cond_u2, float B) {

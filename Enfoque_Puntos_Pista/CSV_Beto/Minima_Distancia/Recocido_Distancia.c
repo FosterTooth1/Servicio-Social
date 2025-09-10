@@ -9,7 +9,7 @@
 
 // Nueva estructura de punto con coordenadas centrales y dos bordes
 typedef struct {
-    double x;              // Posición actual (optimizada)
+    double x;              // Posición actual 
     double y;
     double x_central;      // Centro de la pista
     double y_central;

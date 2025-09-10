@@ -87,16 +87,16 @@ def main():
     
     # Ejecutamos la simulación
     resultados = sim.simular(
-        delta_t=0.01,
+        delta_t=0.01, # paso de tiempo
         limite_tiempo=7,  # tiempo total de simulación
-        cond_x=0.0,
-        cond_y=0.0,
-        cond_phi=0.0,
-        cond_vl=0.0,
-        cond_vr=0.0,
-        B=0.20,
-        target_x=target[0],
-        target_y=target[1]
+        cond_x=0.0, # Posición inicial x
+        cond_y=0.0, # Posición inicial y
+        cond_phi=0.0, # Orientación inicial
+        cond_vl=0.0, # Velocidad inicial rueda izquierda
+        cond_vr=0.0, # Velocidad inicial rueda derecha
+        B=0.20, # Distancia entre ruedas
+        target_x=target[0], # Posición objetivo x
+        target_y=target[1] # Posición objetivo y
     )
     
     # Extraemos de los resultados únicamente los puntos (x, y)

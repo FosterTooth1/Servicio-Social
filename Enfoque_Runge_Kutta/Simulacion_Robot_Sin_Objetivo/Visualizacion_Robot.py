@@ -89,14 +89,14 @@ def main():
     
     sim = Simulator(lib_path)
     resultados = sim.simular(
-        delta_t=0.01,
-        limite_tiempo=600,
-        cond_x=0.0,
-        cond_y=0.0,
-        cond_phi=0.0,
-        cond_vl=0.0,
-        cond_vr=0.0,
-        B=0.20
+        delta_t=0.01, # Paso de tiempo
+        limite_tiempo=600, # Tiempo total de simulación (10 minutos)
+        cond_x=0.0, # Condición inicial en x
+        cond_y=0.0, # Condición inicial en y
+        cond_phi=0.0, # Condición inicial en phi
+        cond_vl=0.0, # Condición inicial en vl
+        cond_vr=0.0, # Condición inicial en vr
+        B=0.20 # Distancia entre llantas
     )
     
     # Extraemos de los resultados únicamente los puntos (x, y) cada 60 segundos.

@@ -7,20 +7,20 @@ int main(int argc, char **argv)
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 5000;
-    double delta_t = 0.01;
-    double tiempo_test = 8.0;
-    int longitud_genotipo = tiempo_test / delta_t;
-    int num_generaciones = 300;
-    int num_competidores = 50;
-    double limite_inferior = -0.5;
-    double limite_superior = 0.5;
-    double probabilidad_mutacion = 0.3;
-    double probabilidad_cruce = 0.9;
-    double B = 0.2;
+    int tamano_poblacion = 5000; // Tamaño de la población
+    double delta_t = 0.01; // Paso de tiempo
+    double tiempo_test = 8.0; // Tiempo total de simulación
+    int longitud_genotipo = tiempo_test / delta_t; // Longitud del genotipo (numero de variables)
+    int num_generaciones = 300; // Número de generaciones
+    int num_competidores = 50; // Número de competidores en la selección por torneo
+    double limite_inferior = -0.5; // Límite inferior para los valores del genotipo
+    double limite_superior = 0.5; // Límite superior para los valores del genotipo
+    double probabilidad_mutacion = 0.3; // Probabilidad de mutación
+    double probabilidad_cruce = 0.9; // Probabilidad de cruce
+    double B = 0.2; // Ancho del robot en metros
     double nc = 10; // SBX (0-20) //Mas alto es mas explotacion
     double nm = 60; // Polinomial (20-100)
-    double distancia_umbral = 0.1;
+    double distancia_umbral = 0.1; // Distancia umbral para considerar que se alcanzó un punto objetivo
     
     // Definir puntos objetivo (ejemplo)
     PuntoObjetivo objetivos[] = {
@@ -28,13 +28,6 @@ int main(int argc, char **argv)
          {5.0, 7.0},
          {8.0, 10.0}};
     int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
-    
-   
-   // Definir puntos objetivo (ejemplo)
-    //PuntoObjetivo objetivos[] = {
-    //    {2.0, 3.0}};
-    //int num_objetivos = sizeof(objetivos) / sizeof(objetivos[0]);
-    
     printf("%d", num_objetivos);
 
     // Inicializamos la población

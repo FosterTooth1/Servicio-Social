@@ -10,15 +10,15 @@ float phi(float vl, float vr, float B);
 
 
 int main(){
-    float delta_t = 0.01;
-    float valor_t = 0;
-    float limite_tiempo = 0.2;
-    float condicion_inicial_x = 0;
-    float condicion_inicial_y = 0;
-    float condicion_inicial_phi = 0;
-    float condicion_inicial_vl = 0;
-    float condicion_inicial_vr = 0;
-    float B = 0.20;
+    float delta_t = 0.01; // Paso de tiempo
+    float valor_t = 0; // Tiempo inicial
+    float limite_tiempo = 0.2; // Tiempo final
+    float condicion_inicial_x = 0; // Posicion inicial en x
+    float condicion_inicial_y = 0; // Posicion inicial en y
+    float condicion_inicial_phi = 0; // Angulo inicial
+    float condicion_inicial_vl = 0; // Velocidad inicial izquierda
+    float condicion_inicial_vr = 0; // Velocidad inicial derecha
+    float B = 0.20; // Distancia entre llantas
     float condicion_inicial_u1; // Izquierda
     float condicion_inicial_u2; // Derecha
 

@@ -7,14 +7,14 @@ int main(int argc, char **argv)
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 5000;
-    double delta_t = 0.01;
-    double tiempo_test = 3.0;
-    int longitud_genotipo = tiempo_test / delta_t;
-    double limite_inferior = -0.5;
-    double limite_superior = 0.5;
-    double B = 0.2;
-    double distancia_umbral = 0.1;
+    int tamano_poblacion = 5000; // Tamaño de la población
+    double delta_t = 0.01; // Paso de tiempo
+    double tiempo_test = 3.0; // Tiempo total de simulación para cada individuo
+    int longitud_genotipo = tiempo_test / delta_t; // Longitud del genotipo (número de genes)
+    double limite_inferior = -0.5; // Límite inferior para u1 y u2
+    double limite_superior = 0.5; // Límite superior para u1 y u2
+    double B = 0.2; // Distancia entre las ruedas
+    double distancia_umbral = 0.1; // Distancia umbral para considerar que se alcanzó un objetivo
     
     /*
     // Definir puntos objetivo (ejemplo)

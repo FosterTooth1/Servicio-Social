@@ -7,9 +7,7 @@ from multiprocessing import Pool, cpu_count
 import os
 from functools import partial
 
-# =============================
 # Configuración de parámetros
-# =============================
 
 wheel_diameter = 0.05  # 5 cm en metros
 max_rpm = 300
@@ -32,20 +30,18 @@ config = {
     'max_acc': 0.7854      # Aceleración máxima permitida
 }
 
-dist_threshold = 0.5
+dist_threshold = 0.5 # Umbral para considerar que se alcanzó un waypoint (en metros)
 
-# =============================
 # Controlador PID mejorado
-# =============================
 class PIDController:
     def __init__(self, Kp=1.0, Ki=0.0, Kd=0.1, dt=0.01):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
         self.dt = dt
-        self.integral = 0.0
-        self.prev_error = 0.0
-        self.integral_limit = 1.0  # Límite anti-windup
+        self.integral = 0.0 # Término integral
+        self.prev_error = 0.0 # Término derivativo
+        self.integral_limit = 1.0 # Límite para el término integral
 
     def reset(self):
         """Reinicia los términos integral y error anterior"""
@@ -54,7 +50,6 @@ class PIDController:
 
     def update(self, error):
         self.integral += error * self.dt
-        # Anti-windup
         self.integral = np.clip(self.integral, -self.integral_limit, self.integral_limit)
         derivative = (error - self.prev_error) / self.dt
         self.prev_error = error
@@ -102,7 +97,7 @@ def objective(pid_params, config, waypoints):
             if not pos_errors:
                 return 1e6  # Penalizar si no se movió
             
-            # Pesos para cada objetivo (ajustables según prioridades)
+            # Pesos para cada objetivo
             w_errors = 1.0     # Peso para errores de posición/ángulo
             w_steps = 0.0005   # Peso para minimizar pasos
             
@@ -123,13 +118,10 @@ def objective(pid_params, config, waypoints):
             print(f"Error en simulación: {str(e)}")
             return 1e6
 
-# =============================
 # Función de autotuning con evolucion diferencial
-# =============================
-
 def autotune_pid(config, waypoints):
     obj_func = partial(objective, config=config, waypoints=waypoints)
-    # Límites realistas para los parámetros
+    # Límites para los parámetros
     bounds = [
         (0.1, 10.0),   # Kp
         (0.0, 5.0),    # Ki
@@ -138,9 +130,9 @@ def autotune_pid(config, waypoints):
     
     iteration = 0
     
-    # Callback para imprimir progreso
+    # Imprimir progreso
     def print_iteration(xk, convergence):
-        nonlocal iteration  # Acceder a la variable del ámbito externo
+        nonlocal iteration
         print(f"Iteración {iteration}: Mejores parámetros Kp={xk[0]:.2f}, Ki={xk[1]:.2f}, Kd={xk[2]:.2f}")
         iteration += 1
     
@@ -177,9 +169,7 @@ def autotune_pid(config, waypoints):
     else:
         return result.x
 
-# =============================
-# Dinámica del robot (sin cambios)
-# =============================
+# Dinámica del robot
 def odefun(t, Xe, Xc, B):
     v_r, v_l, theta, y, x = Xe
     dx = (v_l + v_r) / 2 * np.cos(theta)
@@ -196,9 +186,7 @@ def runge_kutta_step(t, Xe, Xc, dt, B):
     k4 = odefun(t + dt, Xe + k3 * dt, Xc, B)
     return Xe + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
 
-# =============================
-# Simulación principal mejorada
-# =============================
+# Simulación principal
 def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
     B = params['B']
     dt = params['dt']
@@ -283,9 +271,7 @@ def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
         
     return Xe[:i+1], t_vec[:i], total_error
 
-# =============================
 # Función para actualizar gráfico
-# =============================
 def update_plot(ax, Xe_current, waypoint, k_values, dt, waypoints):
     pos_x = Xe_current[4]
     pos_y = Xe_current[3]
@@ -313,9 +299,7 @@ def update_plot(ax, Xe_current, waypoint, k_values, dt, waypoints):
     ax.legend(loc='upper right')
     plt.draw()
 
-# =============================
 # Función principal
-# =============================
 def main():
     print("Cargando waypoints desde CSV...")
     waypoints = load_waypoints("pista_escalada.csv")

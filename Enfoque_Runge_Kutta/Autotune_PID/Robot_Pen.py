@@ -1,9 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# =============================
 # Configuración de parámetros
-# =============================
 config = {
     'B': 0.2,         # Ancho del auto
     'dt': 0.01,       # Paso de tiempo (segundos)
@@ -15,9 +13,7 @@ config = {
     'acc_left': 0.5     # Aceleración rueda izquierda
 }
 
-# =============================
 # Función que define la dinámica del robot
-# =============================
 def odefun(t, Xe, Xc, B):
     """
     Calcula la derivada del vector de estado.
@@ -43,9 +39,7 @@ def odefun(t, Xe, Xc, B):
 
     return np.array([dv_r, dv_l, dtheta, dy, dx])
 
-# =============================
 # Función para un paso de integración Runge-Kutta 4
-# =============================
 def runge_kutta_step(t, Xe, Xc, dt, B):
     """
     Realiza un paso de integración usando Runge-Kutta de 4to orden.
@@ -67,9 +61,7 @@ def runge_kutta_step(t, Xe, Xc, dt, B):
 
     return Xe + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
 
-# =============================
 # Función para actualizar la gráfica
-# =============================
 def update_plot(ax, Xe_current, k_values, dt):
     """
     Actualiza la visualización del robot.
@@ -103,9 +95,7 @@ def update_plot(ax, Xe_current, k_values, dt):
     ax.quiver(pos_x, pos_y, vx, vy, angles='xy', scale_units='xy', scale=0.5, color='r', linewidth=2)
     plt.pause(0.0001)
 
-# =============================
 # Función principal de simulación
-# =============================
 def lego_robot_simulation(params):
     # Extraer parámetros
     B = params['B']
@@ -153,9 +143,7 @@ def lego_robot_simulation(params):
     plt.show()
     return Xe, t_vec
 
-# =============================
 # Función main
-# =============================
 def main():
     """
     Función principal para ejecutar la simulación.

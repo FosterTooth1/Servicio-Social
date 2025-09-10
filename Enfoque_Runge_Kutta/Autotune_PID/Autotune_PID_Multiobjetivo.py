@@ -3,17 +3,14 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from datetime import datetime
 import csv
-# Asegúrate de tener instalado pymoo:
-# pip install pymoo
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.optimize import minimize
 from multiprocessing.pool import ThreadPool
 from pymoo.core.problem import ElementwiseProblem
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import ProcessPoolExecutor
-# =============================
+
 # Configuración de parámetros
-# =============================
 
 # Parámetros físicos del robot
 wheel_diameter = 0.05  # 5 cm en metros
@@ -52,20 +49,18 @@ config = {
     'max_acc': 0.7854      # Aceleración máxima permitida
 }
 
-dist_threshold = 0.5
+dist_threshold = 0.5 # Umbral de distancia para considerar un waypoint como alcanzado
 
-# =============================
 # Controlador PID mejorado
-# =============================
 class PIDController:
     def __init__(self, Kp=1.0, Ki=0.0, Kd=0.1, dt=0.01):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
         self.dt = dt
-        self.integral = 0.0
-        self.prev_error = 0.0
-        self.integral_limit = 1.0  # Límite anti-windup
+        self.integral = 0.0 # Término integral
+        self.prev_error = 0.0 # Término derivativo
+        self.integral_limit = 1.0 # Límite para el término integral
 
     def reset(self):
         """Reinicia los términos integral y error anterior"""
@@ -74,16 +69,13 @@ class PIDController:
 
     def update(self, error):
         self.integral += error * self.dt
-        # Anti-windup
         self.integral = np.clip(self.integral, -self.integral_limit, self.integral_limit)
         derivative = (error - self.prev_error) / self.dt
         self.prev_error = error
         return self.Kp * error + self.Ki * self.integral + self.Kd * derivative
     
 
-# =============================
-# Dinámica del robot (sin cambios)
-# =============================
+# Dinámica del robot
 def odefun(t, Xe, Xc, B):
     v_r, v_l, theta, y, x = Xe
     dx = (v_l + v_r) / 2 * np.cos(theta)
@@ -100,9 +92,7 @@ def runge_kutta_step(t, Xe, Xc, dt, B):
     k4 = odefun(t + dt, Xe + k3 * dt, Xc, B)
     return Xe + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
 
-# =============================
-# Simulación principal mejorada
-# =============================
+# Simulación principal
 def lego_robot_simulation(params, waypoints, pid_params=None, visualize=False):
     B = params['B']
     dt = params['dt']
@@ -187,9 +177,7 @@ def lego_robot_simulation(params, waypoints, pid_params=None, visualize=False):
         
     return Xe[:i+1], t_vec[:i], total_error
 
-# =============================
 # Función para actualizar gráfico
-# =============================
 def update_plot(ax, Xe_current, waypoint, k_values, dt):
     pos_x = Xe_current[4]
     pos_y = Xe_current[3]
@@ -217,9 +205,7 @@ def update_plot(ax, Xe_current, waypoint, k_values, dt):
     ax.legend(loc='upper right')
     plt.draw()
     
-# ===============================
 # Definir la función multiobjetivo
-# ===============================
 def evaluate_pid(pid_params):
     try:
         # Convertir parámetros a float explícitamente
@@ -259,9 +245,7 @@ def evaluate_pid(pid_params):
         print(f"Error crítico en evaluación: {str(e)}")
         return 1e6, 1e6, 1e6
 
-# ====================================
 # Definir el problema para pymoo
-# ====================================
 class PIDOptimizationProblem(ElementwiseProblem):
     def __init__(self):
         super().__init__(
@@ -279,13 +263,11 @@ class PIDOptimizationProblem(ElementwiseProblem):
             print(f"Error en evaluación: {str(e)}")
             out["F"] = [1e6, 1e6, 1e6]
 
-# ====================================
 # Ejecutar NSGA-II
-# ====================================
 def optimize_pid_nsga2():
     
     problem = PIDOptimizationProblem()
-    executor = ProcessPoolExecutor(max_workers=14)  # Usa procesos
+    executor = ProcessPoolExecutor(max_workers=14)  # Numero de núcleos disponibles
     problem.runner = executor.map
     
     algorithm = NSGA2(
@@ -303,9 +285,7 @@ def optimize_pid_nsga2():
     executor.shutdown()
     return res
 
-# ====================================
-# Función principal modificada
-# ====================================
+# Función principal
 def main_nsga2():
     print("Cargando waypoints desde CSV...")
     print(f"Waypoints cargados: {len(waypoints)} puntos")
@@ -317,7 +297,7 @@ def main_nsga2():
     for sol, f in zip(res.X, res.F):
         print(f"Parámetros: Kp={sol[0]:.2f}, Ki={sol[1]:.2f}, Kd={sol[2]:.2f} => Objetivos: {f}")
     
-    # Opcional: seleccionar la solución que cumpla mejor con un criterio de compromiso
+    # Seleccionar la solución que cumpla mejor con un criterio de compromiso
     # Por ejemplo, la que minimice la suma de los tres objetivos
     sums = np.sum(res.F, axis=1)
     best_idx = np.argmin(sums)

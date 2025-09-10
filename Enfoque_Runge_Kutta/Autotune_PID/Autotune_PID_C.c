@@ -931,17 +931,17 @@ int main(int argc, char **argv)
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 1;
-    double delta_t = 0.01;
-    double tiempo_test = 20.0;
-    int longitud_genotipo = tiempo_test / delta_t;
-    int num_generaciones = 300;
-    int num_competidores = 50;
-    double limite_inferior = 0;
-    double limite_superior = 0.7854;
-    double probabilidad_mutacion = 0.3;
-    double probabilidad_cruce = 0.9;
-    double B = 0.2;
+    int tamano_poblacion = 1; // Tamaño de la población
+    double delta_t = 0.01; // Paso de tiempo
+    double tiempo_test = 20.0; // Tiempo total de simulación
+    int longitud_genotipo = tiempo_test / delta_t; // Longitud del genotipo (número de genes)
+    int num_generaciones = 300; // Número de generaciones
+    int num_competidores = 50; // Número de competidores en el torneo
+    double limite_inferior = -.5; // Límite inferior para los genes
+    double limite_superior = 0.5; // Límite superior para los genes
+    double probabilidad_mutacion = 0.3; // Probabilidad de mutación
+    double probabilidad_cruce = 0.9; // Probabilidad de cruzamiento
+    double B = 0.2; // Distancia entre ruedas
     double nc = 10; // SBX (0-20) //Mas alto es mas explotacion
     double nm = 60; // Polinomial (20-100)
     double distancia_umbral = 0.5;
@@ -992,7 +992,7 @@ int main(int argc, char **argv)
 
     // Copiamos el fitness del mejor individuo
     Mejor_Individuo->fitness = Poblacion->individuos[0].fitness;
-    /*
+
     // Ejecutamos el algoritmo genético
     for (int generacion = 0; generacion < num_generaciones; generacion++)
     {
@@ -1026,8 +1026,6 @@ int main(int argc, char **argv)
             Mejor_Individuo->fitness = Poblacion->individuos[0].fitness;
         }
     }
-
-    */
 
     // Imprimimos al mejor individuo
     printf("Fitness del mejor individuo: %Lf\n", Mejor_Individuo->fitness);

@@ -7,19 +7,19 @@ int main(int argc, char **argv)
 
     // Parámetros del algoritmo genético
     srand(time(NULL));
-    int tamano_poblacion = 100;
-    double delta_t = 0.01;
-    double tiempo_test = 7.75;
-    int longitud_genotipo = tiempo_test / delta_t;
-    int num_generaciones = 300;
-    int num_competidores = 2;
-    double limite_inferior = -0.5;
-    double limite_superior = 0.5;
-    double probabilidad_mutacion = 0.3;
-    double probabilidad_cruce = 0.9;
-    double B = 0.2;
-    double cord_obj_x = 15.0; 
-    double cord_obj_y = 7.5;
+    int tamano_poblacion = 100; // Tamaño de la población
+    double delta_t = 0.01; // Intervalo de tiempo
+    double tiempo_test = 7.75; // Tiempo total de simulación
+    int longitud_genotipo = tiempo_test / delta_t; // Longitud del genotipo (número de genes)
+    int num_generaciones = 300; // Número de generaciones
+    int num_competidores = 2; // Número de competidores en el torneo
+    double limite_inferior = -0.5; // Límite inferior para los valores del genotipo
+    double limite_superior = 0.5; // Límite superior para los valores del genotipo
+    double probabilidad_mutacion = 0.3; // Probabilidad de mutación
+    double probabilidad_cruce = 0.9; // Probabilidad de cruce
+    double B = 0.2; // Distancia entre ruedas
+    double cord_obj_x = 15.0; // Coordenada x del objetivo
+    double cord_obj_y = 7.5; // Coordenada y del objetivo
     double nc = 10; // SBX (0-20) //Mas alto es mas explotacion
     double nm = 60; // Polinomial (20-100)
 

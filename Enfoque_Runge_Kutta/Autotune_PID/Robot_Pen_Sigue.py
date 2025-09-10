@@ -2,9 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 
-# =============================
 # Configuración de parámetros
-# =============================
 
 # Parámetros físicos del robot
 wheel_diameter = 0.05  # 5 cm en metros
@@ -25,21 +23,18 @@ config = {
 }
 
 waypoints = np.array([[0, 0], [2, 2], [4, 0], [6, 2], [8, 0]])
-dist_threshold = 0.5
+dist_threshold = 0.5 # Umbral para considerar que se alcanzó un waypoint
 
-# =============================
-# Controlador PID mejorado
-# =============================
-# =============================
+# Controlador PID
 class PIDController:
     def __init__(self, Kp=1.0, Ki=0.0, Kd=0.1, dt=0.01):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
         self.dt = dt
-        self.integral = 0.0
-        self.prev_error = 0.0
-        self.integral_limit = 1.0  # Límite anti-windup
+        self.integral = 0.0 # Término integral
+        self.prev_error = 0.0 # Error anterior para derivada
+        self.integral_limit = 1.0 # Límite para el término integral
 
     def reset(self):
         """Reinicia los términos integral y error anterior"""
@@ -54,9 +49,7 @@ class PIDController:
         self.prev_error = error
         return self.Kp * error + self.Ki * self.integral + self.Kd * derivative
 
-# =============================
-# Función de autotuning mejorada
-# =============================
+# Función de autotuning
 def autotune_pid(config, waypoints):
     def objective(pid_params):
         Kp, Ki, Kd = pid_params
@@ -106,7 +99,7 @@ def autotune_pid(config, waypoints):
             print(f"Error en simulación: {str(e)}")
             return 1e6
 
-    # Límites realistas para los parámetros
+    # Límites para los parámetros
     bounds = [
         (0.1, 5.0),   # Kp
         (0.0, 2.0),    # Ki
@@ -129,9 +122,7 @@ def autotune_pid(config, waypoints):
     
     return result.x if result.success else [1.0, 0.0, 0.1]
 
-# =============================
-# Dinámica del robot (sin cambios)
-# =============================
+# Dinámica del robot
 def odefun(t, Xe, Xc, B):
     v_r, v_l, theta, y, x = Xe
     dx = (v_l + v_r) / 2 * np.cos(theta)
@@ -148,9 +139,7 @@ def runge_kutta_step(t, Xe, Xc, dt, B):
     k4 = odefun(t + dt, Xe + k3 * dt, Xc, B)
     return Xe + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
 
-# =============================
-# Simulación principal mejorada
-# =============================
+# Simulación principal
 def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
     B = params['B']
     dt = params['dt']
@@ -238,9 +227,7 @@ def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
         
     return Xe[:i+1], t_vec[:i], total_error
 
-# =============================
 # Función para actualizar gráfico
-# =============================
 def update_plot(ax, Xe_current, waypoint, k_values, dt):
     pos_x = Xe_current[4]
     pos_y = Xe_current[3]
@@ -267,9 +254,7 @@ def update_plot(ax, Xe_current, waypoint, k_values, dt):
     ax.legend(loc='upper right')
     plt.draw()
 
-# =============================
 # Función principal
-# =============================
 def main():
     print("Iniciando autotuning PID...")
     optimized_pid = autotune_pid(config, waypoints)

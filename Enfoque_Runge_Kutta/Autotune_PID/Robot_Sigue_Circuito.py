@@ -9,9 +9,7 @@ import numpy as np
 from scipy.optimize import differential_evolution
 from functools import partial
 
-# =============================
 # Configuración de parámetros
-# =============================
 
 # Parámetros físicos del robot
 wheel_diameter = 0.05  # 5 cm en metros
@@ -51,20 +49,18 @@ config = {
     'max_acc': 0.7854      # Aceleración máxima permitida
 }
 
-dist_threshold = 0.5
+dist_threshold = 0.5 # Umbral para considerar que se alcanzó un waypoint
 
-# =============================
-# Controlador PID mejorado
-# =============================
+# Controlador PID
 class PIDController:
     def __init__(self, Kp=1.0, Ki=0.0, Kd=0.1, dt=0.01):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
         self.dt = dt
-        self.integral = 0.0
-        self.prev_error = 0.0
-        self.integral_limit = 1.0  # Límite anti-windup
+        self.integral = 0.0 # Término integral
+        self.prev_error = 0.0 # Error anterior para derivada
+        self.integral_limit = 1.0 # Límite para el término integral
 
     def reset(self):
         """Reinicia los términos integral y error anterior"""
@@ -73,16 +69,13 @@ class PIDController:
 
     def update(self, error):
         self.integral += error * self.dt
-        # Anti-windup
         self.integral = np.clip(self.integral, -self.integral_limit, self.integral_limit)
         derivative = (error - self.prev_error) / self.dt
         self.prev_error = error
         return self.Kp * error + self.Ki * self.integral + self.Kd * derivative
 
 
-# =============================
-# Dinámica del robot (sin cambios)
-# =============================
+# Dinámica del robot
 def odefun(t, Xe, Xc, B):
     v_r, v_l, theta, y, x = Xe
     dx = (v_l + v_r) / 2 * np.cos(theta)
@@ -99,9 +92,7 @@ def runge_kutta_step(t, Xe, Xc, dt, B):
     k4 = odefun(t + dt, Xe + k3 * dt, Xc, B)
     return Xe + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
 
-# =============================
-# Simulación principal mejorada
-# =============================
+# Simulación principal
 def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
     B = params['B']
     dt = params['dt']
@@ -186,9 +177,7 @@ def lego_robot_simulation(params, waypoints, pid_params=None, visualize=True):
         
     return Xe[:i+1], t_vec[:i], total_error
 
-# =============================
 # Función para actualizar gráfico
-# =============================
 def update_plot(ax, Xe_current, waypoint, k_values, dt):
     pos_x = Xe_current[4]
     pos_y = Xe_current[3]
